@@ -7,9 +7,10 @@ maimai DX NETの「でらっくすRating」ページからベスト枠を同期�
 | コマンド | 内容 |
 | --- | --- |
 | `/maimai sync` | ブラウザ用ブックマークレットを発行して、ベスト枠を同期 |
+| `/maimai help` | 使い方を表示 |
 | `/maimai best [kind]` | 定数・単曲レート・達成率を含むベスト枠を表示 |
-| `/maimai best-mobile [kind]` | スマホ向けの短いベスト枠を表示 |
-| `/maimai best-image [kind]` | ベスト枠を画像で表示 |
+| `/maimai mbest [kind]` | スマホ向けの短いベスト枠を表示 |
+| `/maimai image [kind]` | ベスト枠を画像で表示 |
 
 `kind` は `新曲` / `旧曲` / `全曲` から選べます。省略時は全曲です。
 

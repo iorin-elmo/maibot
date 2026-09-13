@@ -18,21 +18,22 @@ const kindOption = (option: SlashCommandStringOption) =>
 export const maimaiCommand = new SlashCommandBuilder()
   .setName("maimai")
   .setDescription("maimaiのベスト枠を表示します")
+  .addSubcommand((command) => command.setName("help").setDescription("使い方を表示します"))
   .addSubcommand((command) => command.setName("sync").setDescription("ブラウザからベスト枠を同期します"))
   .addSubcommand((command) => command.setName("best").setDescription("ベスト枠を表示します")
     .addStringOption(kindOption))
-  .addSubcommand((command) => command.setName("best-mobile").setDescription("スマホ向けの短いベスト枠表示")
+  .addSubcommand((command) => command.setName("mbest").setDescription("スマホ向けの短いベスト枠表示")
     .addStringOption(kindOption))
-  .addSubcommand((command) => command.setName("best-image").setDescription("ベスト枠を画像で表示します")
+  .addSubcommand((command) => command.setName("image").setDescription("ベスト枠を画像で表示します")
     .addStringOption(kindOption));
 
 function renderMarkdownScore(score: ScoreRecord, index: number, mixed: boolean): string {
   const rank = String(score.officialRank ?? index + 1).padStart(2, "0");
-  const achievement = (typeof score.achievements === "number" ? `${score.achievements.toFixed(4)}%` : "-").padStart(9);
-  const constant = `[${typeof score.internalLevel === "number" ? score.internalLevel.toFixed(1) : "?"}]`.padEnd(6);
-  const rating = (typeof score.internalLevel === "number" ? String(score.rating) : "?").padStart(3);
+  const achievement = typeof score.achievements === "number" ? `${score.achievements.toFixed(4)}%` : "-";
+  const constant = `[${typeof score.internalLevel === "number" ? score.internalLevel.toFixed(1) : "?"}]`;
+  const rating = typeof score.internalLevel === "number" ? String(score.rating) : "?";
   const prefix = mixed ? `${score.chartKind === "new" ? "新" : "旧"}#${rank}` : `#${rank}`;
-  return `${prefix} ${constant} ${rating} / ${achievementRank(score.achievements).padEnd(4)} ${achievement} / ${truncateSongTitle(score.title)}`;
+  return `**${prefix}** ${constant} ${rating} / ${achievementRank(score.achievements)} ${achievement} / ${truncateSongTitle(score.title)}`;
 }
 
 function renderMobileScore(score: ScoreRecord, index: number): string {
@@ -61,11 +62,25 @@ function bestEmbeds(playerName: string, label: string, summary: string, scores: 
     new EmbedBuilder()
       .setColor(0xff5a9e)
       .setTitle(`${playerName} の${label}${index ? "（続き）" : ""}`)
-      .setDescription(`${index ? "" : `**${summary}**\n\n`}\`\`\`\n${description}\n\`\`\``));
+      .setDescription(`${index ? "" : `**${summary}**\n\n`}${description}`));
 }
 
 export async function handleMaimai(interaction: ChatInputCommandInteraction, db: BotDatabase, importBaseUrl: string): Promise<void> {
   const subcommand = interaction.options.getSubcommand();
+  if (subcommand === "help") {
+    const embed = new EmbedBuilder()
+      .setColor(0xff5a9e)
+      .setTitle("maimai Bot の使い方")
+      .setDescription("まず `/maimai sync` を実行し、返信のブックマークレットをmaimai DX NETの「でらっくすRating」ページで実行してください。")
+      .addFields(
+        { name: "/maimai best [kind]", value: "PC向けの詳しいベスト枠表示" },
+        { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
+        { name: "/maimai image [kind]", value: "ベスト枠を画像で表示" },
+        { name: "kind", value: "新曲 / 旧曲 / 全曲。省略時は全曲。" }
+      );
+    await interaction.reply({ embeds: [embed], ephemeral: true });
+    return;
+  }
   if (subcommand === "sync") {
     const token = db.createImportToken(interaction.user.id);
     const bookmarklet = makeBookmarklet(importBaseUrl, token);
@@ -102,7 +117,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       : `新曲レート: ${newTotal} + 旧曲レート: ${oldTotal} = 全曲レート: ${newTotal + oldTotal}`;
   const playerName = account.playerName ?? "maimai";
 
-  if (subcommand === "best-mobile") {
+  if (subcommand === "mbest") {
     const embeds = splitLines(scores.map(renderMobileScore), 4_000).map((description, index) => new EmbedBuilder()
       .setColor(0xff5a9e)
       .setTitle(`${playerName} の${label}${index ? "（続き）" : ""}`)
@@ -111,7 +126,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     return;
   }
 
-  if (subcommand === "best-image") {
+  if (subcommand === "image") {
     const image = renderBestImage(playerName, label, summary, scores, mixed);
     await interaction.reply({ files: [new AttachmentBuilder(image, { name: "maimai-best.png" })] });
     return;
