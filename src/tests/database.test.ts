@@ -31,3 +31,20 @@ test("プロフィールの再インポートは前のスコアを置き換え�
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("同期トークンは連携コマンドなしでDiscordアカウントを作成する", () => {
+  const directory = mkdtempSync(join(tmpdir(), "maibot-test-"));
+  const db = new BotDatabase(join(directory, "test.sqlite"));
+  try {
+    const token = db.createImportToken("discord-user");
+    assert.equal(db.consumeImportToken(token), "discord-user");
+    db.importProfile("discord-user", {
+      playerName: "Player", rating: 15000,
+      scores: [{ title: "song", difficulty: "MASTER", rating: 300, chartKind: "new" }]
+    });
+    assert.equal(db.getAccount("discord-user")?.rating, 15000);
+  } finally {
+    db.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

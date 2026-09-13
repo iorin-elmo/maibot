@@ -56,11 +56,17 @@ export class BotDatabase {
     return this.db.prepare("DELETE FROM accounts WHERE discord_user_id = ?").run(discordUserId).changes > 0;
   }
 
+  private ensureAccount(discordUserId: string): void {
+    this.db.prepare(`INSERT INTO accounts (discord_user_id, sega_id) VALUES (?, ?)
+      ON CONFLICT(discord_user_id) DO NOTHING`).run(discordUserId, `discord:${discordUserId}`);
+  }
+
   getAccount(discordUserId: string): LinkedAccount | undefined {
     return this.db.prepare("SELECT discord_user_id AS discordUserId, sega_id AS segaId, player_name AS playerName, rating, updated_at AS updatedAt FROM accounts WHERE discord_user_id = ?").get(discordUserId) as LinkedAccount | undefined;
   }
 
   createImportToken(discordUserId: string): string {
+    this.ensureAccount(discordUserId);
     if (!this.getAccount(discordUserId)) throw new Error("先に /maimai link を実行してください。");
     const token = randomBytes(24).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest("hex");
@@ -80,6 +86,7 @@ export class BotDatabase {
   }
 
   importProfile(discordUserId: string, profile: ImportedProfile): void {
+    this.ensureAccount(discordUserId);
     if (!this.getAccount(discordUserId)) throw new Error("先に /maimai link を実行してください。");
     this.db.exec("BEGIN IMMEDIATE");
     try {
