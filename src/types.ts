@@ -1,0 +1,31 @@
+export type ChartKind = "new" | "old" | "unknown";
+
+export interface ScoreRecord {
+  title: string;
+  difficulty: string;
+  level?: string;
+  achievements?: number;
+  dxScore?: number;
+  rating: number;
+  chartKind?: ChartKind;
+  chartType?: "dx" | "standard";
+  internalLevel?: number;
+  /** 公式のDX Rating画面での枠内順位。Best枠外の候補譜面も含み得ます。 */
+  officialRank?: number;
+  playedAt?: string;
+}
+
+export interface ImportedProfile {
+  playerName: string;
+  rating: number;
+  updatedAt?: string;
+  scores: ScoreRecord[];
+}
+
+export interface LinkedAccount {
+  discordUserId: string;
+  segaId: string;
+  playerName: string | null;
+  rating: number | null;
+  updatedAt: string | null;
+}
