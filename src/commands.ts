@@ -33,6 +33,10 @@ function accountId(interaction: ChatInputCommandInteraction): string {
   return interaction.options.getUser("user")?.id ?? interaction.user.id;
 }
 
+maimaiCommand.addSubcommand((command) => command.setName("best-mobile").setDescription("スマホ向けの短いベスト枠表示")
+  .addStringOption((option) => option.setName("kind").setDescription("表示する譜面区分").addChoices(
+    { name: "新曲", value: "new" }, { name: "旧曲", value: "old" }, { name: "全曲", value: "all" })));
+
 function shortNumber(value: number | undefined): string {
   return value === undefined ? "-" : value.toLocaleString("ja-JP", { maximumFractionDigits: 4 });
 }
@@ -45,6 +49,13 @@ function renderMarkdownScore(score: ScoreRecord, index: number, mixed: boolean):
   const title = truncateSongTitle(score.title);
   const prefix = mixed ? `${score.chartKind === "new" ? "新" : "旧"}#${rank}` : `#${rank}`;
   return `${prefix} ${constant} ${rating} / ${achievementRank(score.achievements).padEnd(4)} ${achievement} / ${title}`;
+}
+
+function renderMobileScore(score: ScoreRecord, index: number): string {
+  const rank = String(score.officialRank ?? index + 1).padStart(2, "0");
+  const category = score.chartKind === "new" ? "新" : "旧";
+  const rating = (typeof score.internalLevel === "number" ? String(score.rating) : "?").padStart(3);
+  return `${category}#${rank} [${rating}] ${truncateSongTitle(score.title)}`;
 }
 
 function splitLines(lines: string[], maxLength = 3800): string[] {
@@ -113,8 +124,10 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   if (subcommand === "sync") {
     const token = db.createImportToken(interaction.user.id);
     const bookmarklet = makeBookmarklet(importBaseUrl, token);
-    const file = new AttachmentBuilder(Buffer.from(bookmarklet, "utf8"), { name: "maimai-sync-bookmarklet.txt" });
-    await interaction.reply({ content: "この添付ファイルの内容を、ブラウザのブックマークURLとして保存してください。PC上のmaimai DX NETでログイン後、**でらっくすRating**ページを開いてそのブックマークを実行すると、10分以内に一度だけ同期できます。SEGA ID・パスワードは送信されません。", files: [file], ephemeral: true });
+    await interaction.reply({
+      content: `下のコード全体をコピーして、ブラウザのブックマークURL欄に貼り付けてください。PC上のmaimai DX NETでログイン後、でらっくすRatingページを開いてそのブックマークを実行すると、50件を一括同期できます。\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのリンクは10分間・1回だけ有効です。SEGA ID・パスワードは送信されません。`,
+      ephemeral: true
+    });
     return;
   }
 
@@ -156,6 +169,15 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     : kind === "old"
       ? `旧曲合計レート: ${oldTotal}`
       : `新曲レート: ${newTotal} + 旧曲レート: ${oldTotal} = 全曲レート: ${newTotal + oldTotal}`;
+  if (subcommand === "best-mobile") {
+    const descriptions = splitLines(list.map(renderMobileScore), 4_000);
+    const embeds = descriptions.map((description, index) => new EmbedBuilder()
+      .setColor(0xff5a9e)
+      .setTitle(`${account.playerName ?? "maimai"} の${label}${index ? "（続き）" : ""}`)
+      .setDescription(`${index ? "" : `**${summary}**\n\n`}\`\`\`\n${description}\n\`\`\``));
+    await interaction.reply({ embeds });
+    return;
+  }
   if (subcommand === "best-image") {
     const playerName = account.playerName ?? "maimai";
     const image = renderBestImage(playerName, label, summary, list, mixed);
