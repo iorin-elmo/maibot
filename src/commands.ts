@@ -71,7 +71,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     const embed = new EmbedBuilder()
       .setColor(0xff5a9e)
       .setTitle("maimai Bot の使い方")
-      .setDescription("まず `/maimai sync` を実行し、返信のブックマークレットをmaimai DX NETの「でらっくすRating」ページで実行してください。")
+      .setDescription("まず `/maimai sync` を実行し、返信のブックマークレットをログイン済みのmaimai DX NET上で実行してください。無料コースでも利用できます。")
       .addFields(
         { name: "/maimai best [kind]", value: "PC向けの詳しいベスト枠表示" },
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
@@ -85,7 +85,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     const token = db.createImportToken(interaction.user.id);
     const bookmarklet = makeBookmarklet(importBaseUrl, token);
     await interaction.reply({
-      content: `下のコード全体をコピーして、ブラウザのブックマークURL欄に貼り付けてください。PC上のmaimai DX NETでログイン後、でらっくすRatingページを開いてそのブックマークを実行すると、50件を一括同期できます。\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのリンクは10分間・1回だけ有効です。SEGA ID・パスワードは送信されません。`,
+      content: `下のコード全体をコピーして、ブラウザのブックマークURL欄に貼り付けてください。PC上でmaimai DX NETへログイン後、任意のページで実行すると、レコード＞楽曲スコア＞versionの全スコアを取得してBest 50を計算します。無料コースでも使えます。\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのリンクは10分間・1回だけ有効です。SEGA ID・パスワードは送信されません。`,
       ephemeral: true
     });
     return;

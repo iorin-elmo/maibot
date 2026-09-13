@@ -1,8 +1,8 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import type { BotDatabase } from "./database.js";
 import { validateProfile } from "./analysis.js";
-import type { ChartKind, ImportedProfile } from "./types.js";
 import type { MaimaiCatalog } from "./catalog.js";
+import type { BotDatabase } from "./database.js";
+import type { ChartKind, ImportedProfile } from "./types.js";
 
 interface BrowserScore {
   title: string;
@@ -11,7 +11,6 @@ interface BrowserScore {
   achievements?: number;
   chartKind: ChartKind;
   chartType: "dx" | "standard";
-  officialRank: number;
 }
 
 interface BrowserPayload {
@@ -21,16 +20,22 @@ interface BrowserPayload {
   scores: BrowserScore[];
 }
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "https://maimaidx.jp",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Private-Network": "true",
+  "Cache-Control": "no-store"
+};
+
 function respond(response: ServerResponse, status: number, body: object): void {
-  response.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "https://maimaidx.jp",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Private-Network": "true",
-    "Cache-Control": "no-store"
-  });
+  response.writeHead(status, { ...corsHeaders, "Content-Type": "application/json; charset=utf-8" });
   response.end(JSON.stringify(body));
+}
+
+function respondScript(response: ServerResponse, script: string): void {
+  response.writeHead(200, { ...corsHeaders, "Content-Type": "text/javascript; charset=utf-8" });
+  response.end(script);
 }
 
 async function requestJson(request: IncomingMessage): Promise<unknown> {
@@ -47,7 +52,7 @@ async function requestJson(request: IncomingMessage): Promise<unknown> {
 
 function asProfile(payload: BrowserPayload): ImportedProfile {
   if (typeof payload.token !== "string" || typeof payload.playerName !== "string" || !Number.isFinite(payload.rating) || !Array.isArray(payload.scores)) {
-    throw new Error("同期データの形式が不正です。");
+    throw new Error("同期データの形式が正しくありません。");
   }
   return validateProfile({
     playerName: payload.playerName,
@@ -57,15 +62,32 @@ function asProfile(payload: BrowserPayload): ImportedProfile {
   });
 }
 
+function makeFreeSyncScript(baseUrl: string, token: string): string {
+  const endpoint = new URL("/v1/browser-sync", baseUrl).toString();
+  return String.raw`(()=>{
+const e=${JSON.stringify(endpoint)},t=${JSON.stringify(token)},b=location.origin;
+if(location.hostname!=="maimaidx.jp"){alert("maimai DX NET上で実行してください");return}
+const n=v=>{const x=Number(String(v||"").replace(/[^0-9.]/g,""));return Number.isFinite(x)?x:undefined};
+const status=(()=>{const x=document.createElement("div");x.style.cssText="position:fixed;z-index:99999;left:8px;right:8px;bottom:8px;padding:12px;background:#2c243b;color:#fff;font-weight:bold;border-radius:6px;text-align:center";document.body.append(x);return x})();
+const scoreRows=(d,k)=>[...d.querySelectorAll("div.w_450.m_15")].map(r=>{const q=s=>r.querySelector(s),title=q("div.music_name_block")?.textContent?.trim(),level=q("div.music_lv_block")?.textContent?.trim(),a=n(q(".music_score_block.w_120")?.textContent||q("div.music_score_block")?.textContent),src=(q("img.h_20.f_l")?.getAttribute("src")||"").toLowerCase(),cls=String(r.firstElementChild?.className||""),raw=cls.match(/music_([a-z]+)_score_back/)?.[1]||["remaster","basic","advanced","expert","master"].find(x=>src.includes(x));if(!title||a===undefined||!raw)return null;const difficulty=raw.toLowerCase().startsWith("re")?"REMASTER":raw.toUpperCase(),type=(r.id.includes("sta_")||(q("img.music_kind_icon")?.getAttribute("src")||"").includes("standard"))?"standard":"dx";return{title,difficulty,level,achievements:a,chartKind:k,chartType:type}}).filter(Boolean);
+const run=async()=>{status.textContent="バージョン一覧を取得中…";const index=await fetch("/maimai-mobile/record/musicVersion/").then(r=>{if(!r.ok)throw Error("バージョン一覧を取得できませんでした");return r.text()});const doc=new DOMParser().parseFromString(index,"text/html"),seen=new Set,versions=[];for(const a of doc.querySelectorAll('a[href*="record/musicVersion/search"]')){const u=new URL(a.getAttribute("href"),b),v=u.searchParams.get("version");if(v&&!seen.has(v)){seen.add(v);versions.push(v)}}if(versions.length<2)throw Error("バージョン一覧を読み取れませんでした");const jobs=versions.flatMap((v,i)=>[0,1,2,3,4].map(diff=>({v,diff,k:i>=versions.length-2?"new":"old"}))),scores=[];for(let i=0;i<jobs.length;i++){const j=jobs[i],u=new URL("/maimai-mobile/record/musicVersion/search/",b);u.searchParams.set("version",j.v);u.searchParams.set("diff",j.diff);status.textContent="スコア取得中… "+(i+1)+" / "+jobs.length;const html=await fetch(u).then(r=>{if(!r.ok)throw Error("スコア取得に失敗しました");return r.text()});scores.push(...scoreRows(new DOMParser().parseFromString(html,"text/html"),j.k))}const best=new Map;for(const s of scores){const key=[s.title,s.difficulty,s.level||"",s.chartType].join("\u0000"),old=best.get(key);if(!old||s.achievements>old.achievements)best.set(key,s)}const name=document.querySelector("div.name_block")?.textContent?.trim()||"maimai player",rating=n(document.querySelector("div.rating_block")?.textContent)||0;status.textContent="Botへ送信中…";const r=await fetch(e,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:t,playerName:name,rating,scores:[...best.values()]})}),j=await r.json();status.remove();if(!r.ok)throw Error(j.error||"sync failed");alert("Botへ"+j.count+"件を同期しました（新曲: 最新2バージョン）")};run().catch(x=>{status.remove();alert("同期できませんでした: "+x.message)})})();`;
+}
+
 export function startBrowserSyncServer(baseUrl: string, db: BotDatabase, catalog: MaimaiCatalog): () => void {
   const url = new URL(baseUrl);
   if (url.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(url.hostname)) {
-    throw new Error("IMPORT_BASE_URL はローカル用の http://127.0.0.1:ポート を指定してください。");
+    throw new Error("IMPORT_BASE_URL はローカル用の http://127.0.0.1:ポート を設定してください。");
   }
   const port = Number(url.port || "80");
   const server = createServer(async (request, response) => {
+    const requestUrl = new URL(request.url ?? "/", url);
     if (request.method === "OPTIONS") return respond(response, 204, {});
-    if (request.method !== "POST" || request.url !== "/v1/browser-sync") return respond(response, 404, { error: "not found" });
+    if (request.method === "GET" && requestUrl.pathname === "/v1/bookmarklet") {
+      const token = requestUrl.searchParams.get("token");
+      if (!token) return respond(response, 400, { error: "token required" });
+      return respondScript(response, makeFreeSyncScript(url.origin, token));
+    }
+    if (request.method !== "POST" || requestUrl.pathname !== "/v1/browser-sync") return respond(response, 404, { error: "not found" });
     try {
       const payload = await requestJson(request) as BrowserPayload;
       const parsedProfile = asProfile(payload);
@@ -85,7 +107,7 @@ export function startBrowserSyncServer(baseUrl: string, db: BotDatabase, catalog
 }
 
 export function makeBookmarklet(baseUrl: string, token: string): string {
-  const endpoint = new URL("/v1/browser-sync", baseUrl).toString();
-  const script = `(()=>{const e=${JSON.stringify(endpoint)},t=${JSON.stringify(token)};if(location.hostname!=="maimaidx.jp"){alert("maimai DX NET上で実行してください");return}const x=s=>document.querySelector(s),a=s=>[...document.querySelectorAll(s)],num=s=>{const n=Number(String(s).replace(/[^0-9.]/g,""));return Number.isFinite(n)?n:undefined},rows=a("div.w_450.m_15").map((r,i)=>{const q=s=>r.querySelector(s),title=q("div.music_name_block")?.textContent?.trim(),level=q("div.music_lv_block")?.textContent?.trim(),score=num(q("div.music_score_block")?.textContent),img=(q("img.h_20.f_l")?.getAttribute("src")||"").toLowerCase(),difficulty=["remaster","basic","advanced","expert","master"].find(d=>img.includes(d))||"unknown",chartType=(q("img.music_kind_icon")?.getAttribute("src")||"").includes("standard")?"standard":"dx";return title?{title,difficulty:difficulty.toUpperCase(),level,achievements:score,chartKind:i<15?"new":"old",officialRank:i<15?i+1:i-14,chartType}:null}).filter(Boolean);if(!rows.length){alert("でらっくすRatingページを開いてから実行してください");return}const rt=num(x("div.rating_block")?.textContent)||0,name=x("div.name_block")?.textContent?.trim()||"maimai player";fetch(e,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:t,playerName:name,rating:rt,scores:rows})}).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j.error||"sync failed");alert("Botへ"+j.count+"件を同期しました")}).catch(err=>alert("同期できませんでした: "+err.message))})();`;
-  return `javascript:${script}`;
+  const source = new URL("/v1/bookmarklet", baseUrl);
+  source.searchParams.set("token", token);
+  return `javascript:fetch(${JSON.stringify(source.toString())}).then(r=>r.ok?r.text():Promise.reject(Error("script load failed"))).then(s=>Function(s)()).catch(e=>alert("同期スクリプトを開始できませんでした: "+e.message))`;
 }

@@ -1,6 +1,6 @@
 # maimai Discord Bot
 
-maimai DX NETの「でらっくすRating」ページからベスト枠を同期し、Discordで表示するBotです。SEGA ID・パスワード・CookieはBotへ送信しません。
+maimai DX NETの「レコード ＞ 楽曲スコア ＞ version」からスコアを同期し、DiscordでBest 50を表示するBotです。無料コースでも使えます。SEGA ID・パスワード・CookieはBotへ送信しません。
 
 ## コマンド
 
@@ -29,10 +29,10 @@ npm run dev
 
 1. Discordで `/maimai sync` を実行する。
 2. 返信にあるコード全体をコピーし、ブラウザのブックマークURL欄へ貼り付ける。
-3. 同じPCでmaimai DX NETへログインし、「でらっくすRating」ページを開く。
-4. 作成したブックマークを実行する。
+3. 同じPCでmaimai DX NETへログインする。
+4. 任意のmaimai DX NETページで作成したブックマークを実行する。
 
-ブックマークレットは1回・10分間だけ有効です。同期データは実行したDiscordアカウントに紐付きます。
+ブックマークレットは「レコード ＞ 楽曲スコア ＞ version」の全バージョン・全難易度を読み取り、下2バージョンを新曲、それ以前を旧曲としてBest 15・Best 35を計算します。1回・10分間だけ有効で、同期データは実行したDiscordアカウントに紐付きます。
 
 ## テスト
 
