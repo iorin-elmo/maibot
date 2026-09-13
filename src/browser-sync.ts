@@ -82,7 +82,7 @@ export function startBrowserSyncServer(baseUrl: string, db: BotDatabase, catalog
   const server = createServer(async (request, response) => {
     const requestUrl = new URL(request.url ?? "/", url);
     if (request.method === "OPTIONS") return respond(response, 204, {});
-    if (request.method === "GET" && requestUrl.pathname === "/v1/bookmarklet") {
+    if (request.method === "GET" && requestUrl.pathname === "/v1/free-bookmarklet") {
       const token = requestUrl.searchParams.get("token");
       if (!token) return respond(response, 400, { error: "token required" });
       return respondScript(response, makeFreeSyncScript(url.origin, token));
@@ -106,8 +106,13 @@ export function startBrowserSyncServer(baseUrl: string, db: BotDatabase, catalog
   return () => server.close();
 }
 
-export function makeBookmarklet(baseUrl: string, token: string): string {
-  const source = new URL("/v1/bookmarklet", baseUrl);
+export function makeFreeBookmarklet(baseUrl: string, token: string): string {
+  const source = new URL("/v1/free-bookmarklet", baseUrl);
   source.searchParams.set("token", token);
   return `javascript:fetch(${JSON.stringify(source.toString())}).then(r=>r.ok?r.text():Promise.reject(Error("script load failed"))).then(s=>Function(s)()).catch(e=>alert("同期スクリプトを開始できませんでした: "+e.message))`;
+}
+
+export function makePremiumBookmarklet(baseUrl: string, token: string): string {
+  const endpoint = new URL("/v1/browser-sync", baseUrl).toString();
+  return `javascript:(()=>{const e=${JSON.stringify(endpoint)},t=${JSON.stringify(token)};if(location.hostname!=="maimaidx.jp"){alert("maimai DX NET上で実行してください");return}const n=v=>{const x=Number(String(v||"").replace(/[^0-9.]/g,""));return Number.isFinite(x)?x:undefined},rows=[...document.querySelectorAll("div.w_450.m_15")].map((r,i)=>{const q=s=>r.querySelector(s),title=q("div.music_name_block")?.textContent?.trim(),level=q("div.music_lv_block")?.textContent?.trim(),a=n(q("div.music_score_block")?.textContent),src=(q("img.h_20.f_l")?.getAttribute("src")||"").toLowerCase(),d=["remaster","basic","advanced","expert","master"].find(x=>src.includes(x));if(!title||a===undefined||!d)return null;return{title,difficulty:d.toUpperCase(),level,achievements:a,chartKind:i<15?"new":"old",officialRank:i<15?i+1:i-14,chartType:(q("img.music_kind_icon")?.getAttribute("src")||"").includes("standard")?"standard":"dx"}}).filter(Boolean);if(!rows.length){alert("でらっくすRatingページを開いてから実行してください");return}const rating=n(document.querySelector("div.rating_block")?.textContent)||0,name=document.querySelector("div.name_block")?.textContent?.trim()||"maimai player";fetch(e,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:t,playerName:name,rating,scores:rows})}).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j.error||"sync failed");alert("Botへ"+j.count+"件を同期しました")}).catch(x=>alert("同期できませんでした: "+x.message))})()`;
 }

@@ -2,7 +2,7 @@ import {
   AttachmentBuilder, EmbedBuilder, SlashCommandBuilder, type ChatInputCommandInteraction, type SlashCommandStringOption
 } from "discord.js";
 import { achievementRank, bestScores } from "./analysis.js";
-import { makeBookmarklet } from "./browser-sync.js";
+import { makeFreeBookmarklet, makePremiumBookmarklet } from "./browser-sync.js";
 import { renderBestImage } from "./best-image.js";
 import type { BotDatabase } from "./database.js";
 import { truncateSongTitle } from "./text.js";
@@ -19,7 +19,8 @@ export const maimaiCommand = new SlashCommandBuilder()
   .setName("maimai")
   .setDescription("maimaiのベスト枠を表示します")
   .addSubcommand((command) => command.setName("help").setDescription("使い方を表示します"))
-  .addSubcommand((command) => command.setName("sync").setDescription("ブラウザからベスト枠を同期します"))
+  .addSubcommand((command) => command.setName("sync").setDescription("StandardコースのRatingページから同期します"))
+  .addSubcommand((command) => command.setName("fsync").setDescription("無料コースのversion別スコアから同期します"))
   .addSubcommand((command) => command.setName("best").setDescription("ベスト枠を表示します")
     .addStringOption(kindOption))
   .addSubcommand((command) => command.setName("mbest").setDescription("スマホ向けの短いベスト枠表示")
@@ -71,8 +72,10 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     const embed = new EmbedBuilder()
       .setColor(0xff5a9e)
       .setTitle("maimai Bot の使い方")
-      .setDescription("まず `/maimai sync` を実行し、返信のブックマークレットをログイン済みのmaimai DX NET上で実行してください。無料コースでも利用できます。")
+      .setDescription("Standardコースなら `/maimai sync`、無料コースなら `/maimai fsync` を実行し、返信のブックマークレットをログイン済みのmaimai DX NET上で実行してください。")
       .addFields(
+        { name: "/maimai sync", value: "Standardコースの「でらっくすRating」ページから同期" },
+        { name: "/maimai fsync", value: "無料コース向け。version別スコアからBest 50を計算して同期" },
         { name: "/maimai best [kind]", value: "PC向けの詳しいベスト枠表示" },
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
         { name: "/maimai image [kind]", value: "ベスト枠を画像で表示" },
@@ -81,11 +84,15 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     await interaction.reply({ embeds: [embed], ephemeral: true });
     return;
   }
-  if (subcommand === "sync") {
+  if (subcommand === "sync" || subcommand === "fsync") {
     const token = db.createImportToken(interaction.user.id);
-    const bookmarklet = makeBookmarklet(importBaseUrl, token);
+    const freeCourse = subcommand === "fsync";
+    const bookmarklet = freeCourse ? makeFreeBookmarklet(importBaseUrl, token) : makePremiumBookmarklet(importBaseUrl, token);
+    const instructions = freeCourse
+      ? "PC上でmaimai DX NETへログイン後、任意のページで実行すると、レコード＞楽曲スコア＞versionの全スコアを取得してBest 50を計算します。無料コースでも使えます。"
+      : "PC上でmaimai DX NETへログイン後、でらっくすRatingページを開いて実行すると、公式のBest 50を同期します。Standardコース向けです。";
     await interaction.reply({
-      content: `下のコード全体をコピーして、ブラウザのブックマークURL欄に貼り付けてください。PC上でmaimai DX NETへログイン後、任意のページで実行すると、レコード＞楽曲スコア＞versionの全スコアを取得してBest 50を計算します。無料コースでも使えます。\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのリンクは10分間・1回だけ有効です。SEGA ID・パスワードは送信されません。`,
+      content: `下のコード全体をコピーして、ブラウザのブックマークURL欄に貼り付けてください。${instructions}\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのリンクは10分間・1回だけ有効です。SEGA ID・パスワードは送信されません。`,
       ephemeral: true
     });
     return;
