@@ -35,6 +35,18 @@ npm run dev
 
 `/maimai fsync` のブックマークレットは「レコード ＞ 楽曲スコア ＞ version」の全バージョン・全難易度を読み取り、下2バージョンを新曲、それ以前を旧曲としてBest 15・Best 35を計算します。`/maimai sync` はでらっくすRatingページで実行してください。どちらも1回・10分間だけ有効で、同期データは実行したDiscordアカウントに紐付きます。
 
+## 他の人も同期できるように公開する
+
+Botを常時稼働するサーバーへ置き、HTTPSの公開URLをBotへ転送してください。利用者はそのURLへ同期データを送るため、各自でBotを起動する必要はありません。
+
+```dotenv
+IMPORT_BASE_URL=https://sync.example.com
+SYNC_LISTEN_HOST=0.0.0.0
+SYNC_LISTEN_PORT=3000
+```
+
+`https://sync.example.com` をサーバーの `3000` 番ポートへ転送するリバースプロキシまたはトンネルを用意してください。公開URLはHTTPSを必須とし、SQLiteデータベースと`.env`はサーバー内だけに保存します。
+
 ## テスト
 
 ```powershell

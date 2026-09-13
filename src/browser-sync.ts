@@ -73,12 +73,8 @@ const scoreRows=(d,k)=>[...d.querySelectorAll("div.w_450.m_15")].map(r=>{const q
 const run=async()=>{status.textContent="バージョン一覧を取得中…";const index=await fetch("/maimai-mobile/record/musicVersion/").then(r=>{if(!r.ok)throw Error("バージョン一覧を取得できませんでした");return r.text()});const doc=new DOMParser().parseFromString(index,"text/html"),seen=new Set,versions=[];for(const a of doc.querySelectorAll('a[href*="record/musicVersion/search"]')){const u=new URL(a.getAttribute("href"),b),v=u.searchParams.get("version");if(v&&!seen.has(v)){seen.add(v);versions.push(v)}}if(versions.length<2)throw Error("バージョン一覧を読み取れませんでした");const jobs=versions.flatMap((v,i)=>[0,1,2,3,4].map(diff=>({v,diff,k:i>=versions.length-2?"new":"old"}))),scores=[];for(let i=0;i<jobs.length;i++){const j=jobs[i],u=new URL("/maimai-mobile/record/musicVersion/search/",b);u.searchParams.set("version",j.v);u.searchParams.set("diff",j.diff);status.textContent="スコア取得中… "+(i+1)+" / "+jobs.length;const html=await fetch(u).then(r=>{if(!r.ok)throw Error("スコア取得に失敗しました");return r.text()});scores.push(...scoreRows(new DOMParser().parseFromString(html,"text/html"),j.k))}const best=new Map;for(const s of scores){const key=[s.title,s.difficulty,s.level||"",s.chartType].join("\u0000"),old=best.get(key);if(!old||s.achievements>old.achievements)best.set(key,s)}const name=document.querySelector("div.name_block")?.textContent?.trim()||"maimai player",rating=n(document.querySelector("div.rating_block")?.textContent)||0;status.textContent="Botへ送信中…";const r=await fetch(e,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:t,playerName:name,rating,scores:[...best.values()]})}),j=await r.json();status.remove();if(!r.ok)throw Error(j.error||"sync failed");alert("Botへ"+j.count+"件を同期しました（新曲: 最新2バージョン）")};run().catch(x=>{status.remove();alert("同期できませんでした: "+x.message)})})();`;
 }
 
-export function startBrowserSyncServer(baseUrl: string, db: BotDatabase, catalog: MaimaiCatalog): () => void {
+export function startBrowserSyncServer(baseUrl: string, listenHost: string, listenPort: number, db: BotDatabase, catalog: MaimaiCatalog): () => void {
   const url = new URL(baseUrl);
-  if (url.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(url.hostname)) {
-    throw new Error("IMPORT_BASE_URL はローカル用の http://127.0.0.1:ポート を設定してください。");
-  }
-  const port = Number(url.port || "80");
   const server = createServer(async (request, response) => {
     const requestUrl = new URL(request.url ?? "/", url);
     if (request.method === "OPTIONS") return respond(response, 204, {});
@@ -100,9 +96,9 @@ export function startBrowserSyncServer(baseUrl: string, db: BotDatabase, catalog
       return respond(response, 400, { error: error instanceof Error ? error.message : "invalid request" });
     }
   });
-  server.listen(port, "127.0.0.1");
+  server.listen(listenPort, listenHost);
   server.on("error", (error) => console.error("Browser sync server failed", error));
-  console.log(`Browser sync endpoint: ${url.origin}/v1/browser-sync`);
+  console.log(`Browser sync endpoint: ${url.origin}/v1/browser-sync (listening on ${listenHost}:${listenPort})`);
   return () => server.close();
 }
 

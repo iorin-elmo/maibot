@@ -7,7 +7,7 @@ import { MaimaiCatalog } from "./catalog.js";
 
 const db = new BotDatabase(config.databasePath);
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-startBrowserSyncServer(config.importBaseUrl, db, new MaimaiCatalog(config.dxdataUrl));
+startBrowserSyncServer(config.importBaseUrl, config.syncListenHost, config.syncListenPort, db, new MaimaiCatalog(config.dxdataUrl));
 
 async function registerCommands(): Promise<void> {
   const rest = new REST({ version: "10" }).setToken(config.discordToken);
