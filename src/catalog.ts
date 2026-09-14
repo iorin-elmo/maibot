@@ -26,6 +26,8 @@ function normalize(value: string): string {
 
 export class MaimaiCatalog {
   private loadPromise: Promise<{ index: Map<string, CatalogEntry>; newestVersions: Set<string> }> | undefined;
+  private loadedAt = 0;
+  private readonly cacheDurationMs = 6 * 60 * 60 * 1_000;
 
   constructor(private readonly sourceUrl: string) {}
 
@@ -34,7 +36,7 @@ export class MaimaiCatalog {
   }
 
   private async load(): Promise<{ index: Map<string, CatalogEntry>; newestVersions: Set<string> }> {
-    if (!this.loadPromise) this.loadPromise = (async () => {
+    if (!this.loadPromise || Date.now() - this.loadedAt >= this.cacheDurationMs) this.loadPromise = (async () => {
       const response = await fetch(this.sourceUrl, { signal: AbortSignal.timeout(20_000) });
       if (!response.ok) throw new Error("譜面定数データを取得できませんでした。");
       const document = await response.json() as CatalogDocument;
@@ -52,6 +54,8 @@ export class MaimaiCatalog {
         });
       }
       const newestVersions = new Set(document.versions.slice(-2).map((version) => version.version));
+      if (newestVersions.size !== 2) throw new Error("譜面定数データの最新バージョン情報が重複しています。");
+      this.loadedAt = Date.now();
       return { index, newestVersions };
     })();
     return this.loadPromise;

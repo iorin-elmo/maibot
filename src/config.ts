@@ -14,12 +14,21 @@ function port(name: string, fallback: number): number {
   return parsed;
 }
 
+function defaultSyncListenPort(importBaseUrl: string): number {
+  const url = new URL(importBaseUrl);
+  const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+  if (url.protocol === "http:" && loopbackHosts.has(url.hostname) && url.port) return Number(url.port);
+  return 31337;
+}
+
+const importBaseUrl = process.env.IMPORT_BASE_URL?.trim() || "http://127.0.0.1:31337";
+
 export const config = {
   discordToken: required("DISCORD_TOKEN"),
   guildId: process.env.DISCORD_GUILD_ID?.trim(),
   databasePath: process.env.DATABASE_PATH?.trim() || "./data/maibot.sqlite",
-  importBaseUrl: process.env.IMPORT_BASE_URL?.trim() || "http://127.0.0.1:31337",
+  importBaseUrl,
   syncListenHost: process.env.SYNC_LISTEN_HOST?.trim() || "127.0.0.1",
-  syncListenPort: port("SYNC_LISTEN_PORT", 31337),
+  syncListenPort: port("SYNC_LISTEN_PORT", defaultSyncListenPort(importBaseUrl)),
   dxdataUrl: process.env.DXDATA_URL?.trim() || "https://miruku.dxrating.net/api/v1/dxdata"
 };
