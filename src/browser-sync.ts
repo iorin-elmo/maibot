@@ -44,7 +44,7 @@ async function requestJson(request: IncomingMessage): Promise<unknown> {
   for await (const chunk of request) {
     const buffer = Buffer.from(chunk);
     size += buffer.length;
-    if (size > 1_000_000) throw new Error("データが大きすぎます。");
+    if (size > 3_000_000) throw new Error("データが大きすぎます。");
     chunks.push(buffer);
   }
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
@@ -73,6 +73,22 @@ const scoreRows=(d,k)=>[...d.querySelectorAll("div.w_450.m_15")].map(r=>{const q
 const run=async()=>{status.textContent="バージョン一覧を取得中…";const index=await fetch("/maimai-mobile/record/musicVersion/").then(r=>{if(!r.ok)throw Error("バージョン一覧を取得できませんでした");return r.text()});const doc=new DOMParser().parseFromString(index,"text/html"),seen=new Set,versions=[];for(const a of doc.querySelectorAll('a[href*="record/musicVersion/search"]')){const u=new URL(a.getAttribute("href"),b),v=u.searchParams.get("version");if(v&&!seen.has(v)){seen.add(v);versions.push(v)}}if(versions.length<2)throw Error("バージョン一覧を読み取れませんでした");const jobs=versions.flatMap((v,i)=>[0,1,2,3,4].map(diff=>({v,diff,k:i>=versions.length-2?"new":"old"}))),scores=[];for(let i=0;i<jobs.length;i++){const j=jobs[i],u=new URL("/maimai-mobile/record/musicVersion/search/",b);u.searchParams.set("version",j.v);u.searchParams.set("diff",j.diff);status.textContent="スコア取得中… "+(i+1)+" / "+jobs.length;const html=await fetch(u).then(r=>{if(!r.ok)throw Error("スコア取得に失敗しました");return r.text()});scores.push(...scoreRows(new DOMParser().parseFromString(html,"text/html"),j.k))}const best=new Map;for(const s of scores){const key=[s.title,s.difficulty,s.level||"",s.chartType].join("\u0000"),old=best.get(key);if(!old||s.achievements>old.achievements)best.set(key,s)}const name=document.querySelector("div.name_block")?.textContent?.trim()||"maimai player",rating=n(document.querySelector("div.rating_block")?.textContent)||0;status.textContent="Botへ送信中…";const r=await fetch(e,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:t,playerName:name,rating,scores:[...best.values()]})}),j=await r.json();status.remove();if(!r.ok)throw Error(j.error||"sync failed");alert("Botへ"+j.count+"件を同期しました（新曲: 最新2バージョン）")};run().catch(x=>{status.remove();alert("同期できませんでした: "+x.message)})})();`;
 }
 
+/**
+ * Free accounts can open the genre score pages even when the version index is
+ * unavailable.  Fetch every difficulty from that page and let the catalogue
+ * perform the latest-two-version split on the server.
+ */
+function makeFreeSyncScriptV2(baseUrl: string, token: string): string {
+  const endpoint = new URL("/v1/browser-sync", baseUrl).toString();
+  return String.raw`(()=>{
+const endpoint=${JSON.stringify(endpoint)},token=${JSON.stringify(token)},origin=location.origin;
+if(location.hostname!=="maimaidx.jp"){alert("Open this from maimai DX NET.");return}
+const number=v=>{const n=Number(String(v||"").replace(/[^0-9.]/g,""));return Number.isFinite(n)?n:undefined};
+const status=(()=>{const e=document.createElement("div");e.style.cssText="position:fixed;z-index:99999;left:8px;right:8px;bottom:8px;padding:12px;background:#2c243b;color:#fff;font-weight:bold;border-radius:6px;text-align:center";document.body.append(e);return e})();
+const scoreRows=document=>[...document.querySelectorAll(".main_wrapper.t_c .m_15,div.w_450.m_15")].map(row=>{const q=selector=>row.querySelector(selector),title=q(".music_name_block")?.textContent?.trim(),level=q(".music_lv_block")?.textContent?.trim(),achievements=number(q(".music_score_block.w_120")?.textContent||q(".music_score_block")?.textContent),className=String(row.firstElementChild?.className||""),image=(q("img.h_20.f_l")?.getAttribute("src")||"").toLowerCase(),raw=className.match(/music_([a-z]+)_score_back/)?.[1]||["remaster","basic","advanced","expert","master"].find(value=>image.includes(value));if(!title||achievements===undefined||!raw)return null;const difficulty=raw.toLowerCase().startsWith("re")?"REMASTER":raw.toUpperCase(),kindImage=q("img.music_kind_icon")?.getAttribute("src")||"";return{title,difficulty,level,achievements,chartKind:"unknown",chartType:row.id.includes("sta_")||kindImage.includes("standard")?"standard":"dx"}}).filter(Boolean);
+const run=async()=>{const scores=[];for(let difficulty=0;difficulty<5;difficulty++){const url=new URL("/maimai-mobile/record/musicGenre/search/",origin);url.searchParams.set("genre","99");url.searchParams.set("diff",String(difficulty));status.textContent="Collecting scores: "+(difficulty+1)+" / 5";const response=await fetch(url);if(!response.ok)throw Error("Could not load score page.");scores.push(...scoreRows(new DOMParser().parseFromString(await response.text(),"text/html")))}const unique=new Map;for(const score of scores){const key=[score.title,score.difficulty,score.level||"",score.chartType].join("\\u0000"),previous=unique.get(key);if(!previous||score.achievements>previous.achievements)unique.set(key,score)}const playerName=document.querySelector(".name_block")?.textContent?.trim()||"maimai player",rating=number(document.querySelector(".rating_block")?.textContent)||0;status.textContent="Sending to bot...";const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,playerName,rating,scores:[...unique.values()]})}),result=await response.json();status.remove();if(!response.ok)throw Error(result.error||"Sync failed.");alert("Saved "+result.count+" scores. The latest two versions are used as new songs.")};run().catch(error=>{status.remove();alert("Sync failed: "+error.message)})})();`;
+}
+
 export function startBrowserSyncServer(baseUrl: string, listenHost: string, listenPort: number, db: BotDatabase, catalog: MaimaiCatalog): () => void {
   const url = new URL(baseUrl);
   const server = createServer(async (request, response) => {
@@ -81,13 +97,17 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
     if (request.method === "GET" && requestUrl.pathname === "/v1/free-bookmarklet") {
       const token = requestUrl.searchParams.get("token");
       if (!token) return respond(response, 400, { error: "token required" });
-      return respondScript(response, makeFreeSyncScript(url.origin, token));
+      return respondScript(response, makeFreeSyncScriptV2(url.origin, token));
     }
     if (request.method !== "POST" || requestUrl.pathname !== "/v1/browser-sync") return respond(response, 404, { error: "not found" });
     try {
       const payload = await requestJson(request) as BrowserPayload;
       const parsedProfile = asProfile(payload);
-      const profile = { ...parsedProfile, scores: await catalog.enrich(parsedProfile.scores) };
+      const enrichedScores = await catalog.enrich(parsedProfile.scores);
+      // Keep every collected chart. Besides rendering Best 15 + 35 now, this
+      // allows future commands to calculate charts that are close to entering
+      // a best frame without requiring the player to sync again.
+      const profile = { ...parsedProfile, scores: enrichedScores };
       const discordUserId = db.consumeImportToken(payload.token);
       if (!discordUserId) return respond(response, 401, { error: "token expired" });
       db.importProfile(discordUserId, profile);

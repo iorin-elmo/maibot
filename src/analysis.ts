@@ -52,7 +52,9 @@ export function validateProfile(value: unknown): ImportedProfile {
   }
   if (!Number.isFinite(profile.rating)) throw new Error("rating は数値にしてください。");
   if (!Array.isArray(profile.scores)) throw new Error("scores は配列にしてください。");
-  if (profile.scores.length > 3000) throw new Error("譜面数が多すぎます（上限3000件）。");
+  // Free-course sync collects all played charts before the server selects Best
+  // 15 + 35. A long-time player can legitimately exceed the old 3,000 limit.
+  if (profile.scores.length > 10_000) throw new Error("譜面数が多すぎます（上限10000件）。");
 
   const scores = profile.scores.map((row, index) => {
     if (!row || typeof row !== "object") throw new Error(`scores[${index}] がオブジェクトではありません。`);
