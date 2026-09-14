@@ -1,7 +1,7 @@
 import {
-  AttachmentBuilder, EmbedBuilder, SlashCommandBuilder, type ChatInputCommandInteraction, type SlashCommandStringOption
+  AttachmentBuilder, EmbedBuilder, SlashCommandBuilder, type ChatInputCommandInteraction, type SlashCommandIntegerOption, type SlashCommandStringOption
 } from "discord.js";
-import { achievementRank, bestScores } from "./analysis.js";
+import { achievementRank, bestCandidates, bestScores, type BestCandidate } from "./analysis.js";
 import { makeFreeBookmarklet, makePremiumBookmarklet } from "./browser-sync.js";
 import { renderBestImage } from "./best-image.js";
 import type { BotDatabase } from "./database.js";
@@ -15,6 +15,9 @@ const kindOption = (option: SlashCommandStringOption) =>
     { name: "全曲", value: "all" }
   );
 
+const countOption = (option: SlashCommandIntegerOption) =>
+  option.setName("count").setDescription("表示件数（既定: 10、最大: 30）").setMinValue(1).setMaxValue(30);
+
 export const maimaiCommand = new SlashCommandBuilder()
   .setName("maimai")
   .setDescription("maimaiのベスト枠を表示します")
@@ -26,7 +29,10 @@ export const maimaiCommand = new SlashCommandBuilder()
   .addSubcommand((command) => command.setName("mbest").setDescription("スマホ向けの短いベスト枠表示")
     .addStringOption(kindOption))
   .addSubcommand((command) => command.setName("image").setDescription("ベスト枠を画像で表示します")
-    .addStringOption(kindOption));
+    .addStringOption(kindOption))
+  .addSubcommand((command) => command.setName("candidate").setDescription("次ランク到達でBest枠に入る候補譜面を表示")
+    .addStringOption(kindOption)
+    .addIntegerOption(countOption));
 
 function renderMarkdownScore(score: ScoreRecord, index: number, mixed: boolean): string {
   const rank = String(score.officialRank ?? index + 1).padStart(2, "0");
@@ -66,6 +72,24 @@ function bestEmbeds(playerName: string, label: string, summary: string, scores: 
       .setDescription(`${index ? "" : `**${summary}**\n\n`}${description}`));
 }
 
+function renderCandidate(candidate: BestCandidate, index: number): string {
+  const score = candidate.score;
+  const constant = `[${score.internalLevel?.toFixed(1) ?? "?"}]`;
+  return `**#${String(index + 1).padStart(2, "0")}** +${candidate.achievementGap.toFixed(4)}% → ${candidate.nextRank} ${candidate.nextAchievement.toFixed(4)}% / ${constant} ${candidate.ratingAtNextRank} / ${truncateSongTitle(score.title)}`;
+}
+
+function candidateEmbeds(playerName: string, kind: "new" | "old", candidates: BestCandidate[]): EmbedBuilder[] {
+  const label = kind === "new" ? "新曲枠の候補" : "旧曲枠の候補";
+  if (!candidates.length) return [new EmbedBuilder()
+    .setColor(0xff5a9e)
+    .setTitle(`${playerName} の${label}`)
+    .setDescription("次のランク到達でBest枠に入る候補はありません。")];
+  return splitLines(candidates.map(renderCandidate), 4_000).map((description, index) => new EmbedBuilder()
+    .setColor(0xff5a9e)
+    .setTitle(`${playerName} の${label}${index ? "（続き）" : ""}`)
+    .setDescription(`${index ? "" : "次ランクまでの差が小さい順です。同差なら枠入り時の単曲レートが高い順です。\n\n"}${description}`));
+}
+
 export async function handleMaimai(interaction: ChatInputCommandInteraction, db: BotDatabase, importBaseUrl: string): Promise<void> {
   const subcommand = interaction.options.getSubcommand();
   if (subcommand === "help") {
@@ -79,6 +103,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         { name: "/maimai best [kind]", value: "PC向けの詳しいベスト枠表示" },
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
         { name: "/maimai image [kind]", value: "ベスト枠を画像で表示" },
+        { name: "/maimai candidate [kind] [count]", value: "次ランク到達でBest枠に入る候補（既定10件、最大30件）" },
         { name: "kind", value: "新曲 / 旧曲 / 全曲。省略時は全曲。" }
       );
     await interaction.reply({ embeds: [embed], ephemeral: true });
@@ -105,8 +130,20 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   }
 
   const kind = interaction.options.getString("kind") ?? "all";
-  const newBest = bestScores(db.getScores(interaction.user.id), "new", 15);
-  const oldBest = bestScores(db.getScores(interaction.user.id), "old", 35);
+  const allScores = db.getScores(interaction.user.id);
+  const newBest = bestScores(allScores, "new", 15);
+  const oldBest = bestScores(allScores, "old", 35);
+  const playerName = account.playerName ?? "maimai";
+
+  if (subcommand === "candidate") {
+    const count = interaction.options.getInteger("count") ?? 10;
+    const kinds: Array<"new" | "old"> = kind === "new" ? ["new"] : kind === "old" ? ["old"] : ["new", "old"];
+    const embeds = kinds.flatMap((candidateKind) =>
+      candidateEmbeds(playerName, candidateKind, bestCandidates(allScores, candidateKind, count)));
+    await interaction.reply({ embeds });
+    return;
+  }
+
   const scores = kind === "new" ? newBest : kind === "old" ? oldBest : [...newBest, ...oldBest];
   if (!scores.length) {
     await interaction.reply({ content: "表示できるベスト枠がありません。`/maimai sync` をやり直してください。", ephemeral: true });
@@ -122,8 +159,6 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     : kind === "old"
       ? `旧曲合計レート: ${oldTotal}`
       : `新曲レート: ${newTotal} + 旧曲レート: ${oldTotal} = 全曲レート: ${newTotal + oldTotal}`;
-  const playerName = account.playerName ?? "maimai";
-
   if (subcommand === "mbest") {
     const embeds = splitLines(scores.map(renderMobileScore), 4_000).map((description, index) => new EmbedBuilder()
       .setColor(0xff5a9e)

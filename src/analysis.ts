@@ -44,6 +44,49 @@ export function singleChartRating(internalLevel: number, achievement: number): n
   return Math.floor(internalLevel * Math.min(achievement, 100.5) * coefficient / 100);
 }
 
+const nextRankThresholds = [50, 60, 70, 75, 80, 90, 94, 97, 98, 99, 99.5, 100, 100.5];
+
+export interface BestCandidate {
+  score: ScoreRecord;
+  nextAchievement: number;
+  nextRank: string;
+  ratingAtNextRank: number;
+  achievementGap: number;
+}
+
+/**
+ * Finds charts outside a best frame which would enter it at their next
+ * achievement-rank threshold. Nearer thresholds are deliberately prioritised
+ * over the rating the chart would contribute once it enters the frame.
+ */
+export function bestCandidates(scores: ScoreRecord[], kind: "new" | "old", limit = 10): BestCandidate[] {
+  const frameSize = kind === "new" ? 15 : 35;
+  const currentBest = bestScores(scores, kind, frameSize);
+  const bestSet = new Set(currentBest);
+
+  return scores.flatMap((score): BestCandidate[] => {
+    if (bestSet.has(score) || chartKindOf(score) !== kind
+      || typeof score.achievements !== "number" || typeof score.internalLevel !== "number") return [];
+    const nextAchievement = nextRankThresholds.find((threshold) => threshold > score.achievements!);
+    if (nextAchievement === undefined) return [];
+    const ratingAtNextRank = singleChartRating(score.internalLevel, nextAchievement);
+    const upgraded = { ...score, achievements: nextAchievement, rating: ratingAtNextRank };
+    // Use the same ordering as the displayed best frame. This also handles a
+    // partially filled frame without a special case.
+    if (!bestScores([...currentBest, upgraded], kind, frameSize).includes(upgraded)) return [];
+    return [{
+      score,
+      nextAchievement,
+      nextRank: achievementRank(nextAchievement),
+      ratingAtNextRank,
+      achievementGap: nextAchievement - score.achievements
+    }];
+  }).sort((a, b) => a.achievementGap - b.achievementGap
+    || b.ratingAtNextRank - a.ratingAtNextRank
+    || b.score.rating - a.score.rating)
+    .slice(0, limit);
+}
+
 export function validateProfile(value: unknown): ImportedProfile {
   if (!value || typeof value !== "object") throw new Error("JSONのルートがオブジェクトではありません。");
   const profile = value as Partial<ImportedProfile>;
