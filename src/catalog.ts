@@ -26,6 +26,7 @@ function normalize(value: string): string {
 
 export class MaimaiCatalog {
   private loadPromise: Promise<{ index: Map<string, CatalogEntry>; newestVersions: Set<string> }> | undefined;
+  private cached: { index: Map<string, CatalogEntry>; newestVersions: Set<string> } | undefined;
   private loadedAt = 0;
   private readonly cacheDurationMs = 6 * 60 * 60 * 1_000;
 
@@ -36,7 +37,8 @@ export class MaimaiCatalog {
   }
 
   private async load(): Promise<{ index: Map<string, CatalogEntry>; newestVersions: Set<string> }> {
-    if (!this.loadPromise || Date.now() - this.loadedAt >= this.cacheDurationMs) this.loadPromise = (async () => {
+    if (this.cached && Date.now() - this.loadedAt < this.cacheDurationMs) return this.cached;
+    if (!this.loadPromise) this.loadPromise = (async () => {
       const response = await fetch(this.sourceUrl, { signal: AbortSignal.timeout(20_000) });
       if (!response.ok) throw new Error("譜面定数データを取得できませんでした。");
       const document = await response.json() as CatalogDocument;
@@ -56,8 +58,9 @@ export class MaimaiCatalog {
       const newestVersions = new Set(document.versions.slice(-2).map((version) => version.version));
       if (newestVersions.size !== 2) throw new Error("譜面定数データの最新バージョン情報が重複しています。");
       this.loadedAt = Date.now();
-      return { index, newestVersions };
-    })();
+      this.cached = { index, newestVersions };
+      return this.cached;
+    })().finally(() => { this.loadPromise = undefined; });
     return this.loadPromise;
   }
 
@@ -67,13 +70,16 @@ export class MaimaiCatalog {
       const entry = score.chartType
         ? index.get(this.key(score.title, score.chartType, score.difficulty, score.level))
         : undefined;
+      if (score.chartKind === "unknown" && (!entry || !entry.version || score.achievements === undefined)) {
+        throw new Error(`譜面定数またはバージョンを照合できませんでした: ${score.title}`);
+      }
       if (!entry || score.achievements === undefined) return score;
       return {
         ...score,
         // Free-course collection retrieves every score page. The catalogue is
         // the stable source of the "latest two versions" split, so it does not
         // depend on the layout of the version-index page.
-        chartKind: entry.version
+        chartKind: score.chartKind === "unknown" && entry.version
           ? (newestVersions.has(entry.version) ? "new" : "old")
           : score.chartKind,
         internalLevel: entry.internalLevel,

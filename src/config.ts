@@ -17,7 +17,7 @@ function port(name: string, fallback: number): number {
 function defaultSyncListenPort(importBaseUrl: string): number {
   const url = new URL(importBaseUrl);
   const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
-  if (url.protocol === "http:" && loopbackHosts.has(url.hostname) && url.port) return Number(url.port);
+  if (url.protocol === "http:" && loopbackHosts.has(url.hostname)) return url.port ? Number(url.port) : 80;
   return 31337;
 }
 
