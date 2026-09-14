@@ -18,13 +18,13 @@ test("不正なプロフィールJSONを拒否する", () => {
 
 test("候補は次ランクで枠入りする譜面だけを、必要達成率差優先で出す", () => {
   const currentBest = Array.from({ length: 15 }, (_, index) => ({
-    title: `Best ${index}`, difficulty: "MASTER", rating: 280, chartKind: "new" as const
+    title: `Best ${index}`, difficulty: "MASTER", rating: 280, chartKind: "new" as const, officialRank: index + 1
   }));
   const candidates = [
-    { title: "Near", difficulty: "MASTER", rating: 270, chartKind: "new" as const, achievements: 99.99, internalLevel: 14 },
-    { title: "High RA", difficulty: "MASTER", rating: 270, chartKind: "new" as const, achievements: 99.4, internalLevel: 14.5 },
-    { title: "Low RA", difficulty: "MASTER", rating: 270, chartKind: "new" as const, achievements: 99.4, internalLevel: 14 },
-    { title: "Does not enter", difficulty: "MASTER", rating: 270, chartKind: "new" as const, achievements: 80, internalLevel: 12 }
+    { title: "Near", difficulty: "MASTER", rating: 270, chartKind: "new" as const, achievements: 99.99, internalLevel: 14, officialRank: 16 },
+    { title: "High RA", difficulty: "MASTER", rating: 270, chartKind: "new" as const, achievements: 99.4, internalLevel: 14.5, officialRank: 17 },
+    { title: "Low RA", difficulty: "MASTER", rating: 270, chartKind: "new" as const, achievements: 99.4, internalLevel: 14, officialRank: 18 },
+    { title: "Does not enter", difficulty: "MASTER", rating: 270, chartKind: "new" as const, achievements: 80, internalLevel: 12, officialRank: 19 }
   ];
 
   const result = bestCandidates([...currentBest, ...candidates], "new", 10);

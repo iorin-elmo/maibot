@@ -103,7 +103,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         { name: "/maimai best [kind]", value: "PC向けの詳しいベスト枠表示" },
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
         { name: "/maimai image [kind]", value: "ベスト枠を画像で表示" },
-        { name: "/maimai candidate [kind] [count]", value: "次ランク到達でBest枠に入る候補（既定10件、最大30件）" },
+        { name: "/maimai candidate [kind] [count]", value: "次ランク到達でBest枠に入る候補。事前に /maimai fsync が必要（既定10件、最大30件）" },
         { name: "kind", value: "新曲 / 旧曲 / 全曲。省略時は全曲。" }
       );
     await interaction.reply({ embeds: [embed], ephemeral: true });
@@ -137,6 +137,13 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
 
   if (subcommand === "candidate") {
     const count = interaction.options.getInteger("count") ?? 10;
+    if (allScores.length > 0 && allScores.every((score) => score.officialRank !== undefined)) {
+      await interaction.reply({
+        content: "候補曲の算出にはBest枠外の譜面も必要です。`/maimai fsync` で全譜面を同期してください。",
+        ephemeral: true
+      });
+      return;
+    }
     const kinds: Array<"new" | "old"> = kind === "new" ? ["new"] : kind === "old" ? ["old"] : ["new", "old"];
     const embeds = kinds.flatMap((candidateKind) =>
       candidateEmbeds(playerName, candidateKind, bestCandidates(allScores, candidateKind, count)));

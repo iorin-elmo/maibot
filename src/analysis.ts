@@ -70,10 +70,11 @@ export function bestCandidates(scores: ScoreRecord[], kind: "new" | "old", limit
     const nextAchievement = nextRankThresholds.find((threshold) => threshold > score.achievements!);
     if (nextAchievement === undefined) return [];
     const ratingAtNextRank = singleChartRating(score.internalLevel, nextAchievement);
-    const upgraded = { ...score, achievements: nextAchievement, rating: ratingAtNextRank };
-    // Use the same ordering as the displayed best frame. This also handles a
-    // partially filled frame without a special case.
-    if (!bestScores([...currentBest, upgraded], kind, frameSize).includes(upgraded)) return [];
+    // officialRank describes the current official frame. It must not determine
+    // the hypothetical result after this chart has improved.
+    const upgraded = { ...score, achievements: nextAchievement, rating: ratingAtNextRank, officialRank: undefined };
+    const hypotheticalFrame = currentBest.map((frameScore) => ({ ...frameScore, officialRank: undefined }));
+    if (!bestScores([...hypotheticalFrame, upgraded], kind, frameSize).includes(upgraded)) return [];
     return [{
       score,
       nextAchievement,
