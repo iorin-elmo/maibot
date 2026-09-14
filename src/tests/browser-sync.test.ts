@@ -5,7 +5,9 @@ import { makeFreeBookmarklet, makePremiumBookmarklet } from "../browser-sync.js"
 test("無料コース同期用ブックマークレットはDiscord本文に収まる", () => {
   const bookmarklet = makeFreeBookmarklet("http://127.0.0.1:31337", "test-token");
   assert.ok(bookmarklet.startsWith("javascript:"));
-  assert.ok(bookmarklet.includes("/v1/free-bookmarklet?token=test-token"));
+  assert.ok(bookmarklet.includes("/v1/free-bookmarklet"));
+  assert.ok(bookmarklet.includes("X-Import-Token"));
+  assert.ok(!bookmarklet.includes("?token="));
   assert.ok(bookmarklet.length < 2_000);
 });
 

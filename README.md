@@ -1,13 +1,13 @@
 # maimai Discord Bot
 
-maimai DX NETの「レコード ＞ 楽曲スコア ＞ version」からスコアを同期し、DiscordでBest 50を表示するBotです。無料コースでも使えます。SEGA ID・パスワード・CookieはBotへ送信しません。
+maimai DX NETのスコアを同期し、DiscordでBest 50を表示するBotです。Standardコースでは「でらっくすRating」、無料コースでは「レコード ＞ 楽曲スコア」の全難易度ページを使います。SEGA ID・パスワード・CookieはBotへ送信しません。
 
 ## コマンド
 
 | コマンド | 内容 |
 | --- | --- |
 | `/maimai sync` | Standardコースの「でらっくすRating」ページから公式Best 50を同期 |
-| `/maimai fsync` | 無料コース向け。version別スコアからBest 50を計算して同期 |
+| `/maimai fsync` | 無料コース向け。全難易度の楽曲スコアからBest 50を計算して同期 |
 | `/maimai help` | 使い方を表示 |
 | `/maimai best [kind]` | 定数・単曲レート・達成率を含むベスト枠を表示 |
 | `/maimai mbest [kind]` | スマホ向けの短いベスト枠を表示 |

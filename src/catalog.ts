@@ -39,6 +39,10 @@ export class MaimaiCatalog {
       if (!response.ok) throw new Error("譜面定数データを取得できませんでした。");
       const document = await response.json() as CatalogDocument;
       if (!Array.isArray(document.songs)) throw new Error("譜面定数データの形式が不正です。");
+      if (!Array.isArray(document.versions) || document.versions.length < 2
+        || document.versions.some((version) => typeof version?.version !== "string" || !version.version)) {
+        throw new Error("譜面定数データに最新バージョン情報がありません。");
+      }
       const index = new Map<string, CatalogEntry>();
       for (const song of document.songs) for (const sheet of song.sheets ?? []) {
         const type = sheet.type === "std" ? "standard" : "dx";
@@ -47,7 +51,7 @@ export class MaimaiCatalog {
           version: sheet.version ?? song.version
         });
       }
-      const newestVersions = new Set((document.versions ?? []).slice(-2).map((version) => version.version));
+      const newestVersions = new Set(document.versions.slice(-2).map((version) => version.version));
       return { index, newestVersions };
     })();
     return this.loadPromise;

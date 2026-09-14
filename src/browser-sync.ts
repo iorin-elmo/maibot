@@ -23,7 +23,7 @@ interface BrowserPayload {
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://maimaidx.jp",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, X-Import-Token",
   "Access-Control-Allow-Private-Network": "true",
   "Cache-Control": "no-store"
 };
@@ -89,27 +89,40 @@ const scoreRows=document=>[...document.querySelectorAll(".main_wrapper.t_c .m_15
 const run=async()=>{const scores=[];for(let difficulty=0;difficulty<5;difficulty++){const url=new URL("/maimai-mobile/record/musicGenre/search/",origin);url.searchParams.set("genre","99");url.searchParams.set("diff",String(difficulty));status.textContent="Collecting scores: "+(difficulty+1)+" / 5";const response=await fetch(url);if(!response.ok)throw Error("Could not load score page.");scores.push(...scoreRows(new DOMParser().parseFromString(await response.text(),"text/html")))}const unique=new Map;for(const score of scores){const key=[score.title,score.difficulty,score.level||"",score.chartType].join("\\u0000"),previous=unique.get(key);if(!previous||score.achievements>previous.achievements)unique.set(key,score)}const playerName=document.querySelector(".name_block")?.textContent?.trim()||"maimai player",rating=number(document.querySelector(".rating_block")?.textContent)||0;status.textContent="Sending to bot...";const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,playerName,rating,scores:[...unique.values()]})}),result=await response.json();status.remove();if(!response.ok)throw Error(result.error||"Sync failed.");alert("Saved "+result.count+" scores. The latest two versions are used as new songs.")};run().catch(error=>{status.remove();alert("Sync failed: "+error.message)})})();`;
 }
 
+function validateImportBaseUrl(url: URL): void {
+  const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1"]);
+  if (url.protocol === "https:" || (url.protocol === "http:" && loopbackHosts.has(url.hostname))) return;
+  throw new Error("IMPORT_BASE_URL はローカルHTTPまたは公開HTTPS URLを指定してください。");
+}
+
 export function startBrowserSyncServer(baseUrl: string, listenHost: string, listenPort: number, db: BotDatabase, catalog: MaimaiCatalog): () => void {
   const url = new URL(baseUrl);
+  validateImportBaseUrl(url);
   const server = createServer(async (request, response) => {
     const requestUrl = new URL(request.url ?? "/", url);
     if (request.method === "OPTIONS") return respond(response, 204, {});
     if (request.method === "GET" && requestUrl.pathname === "/v1/free-bookmarklet") {
-      const token = requestUrl.searchParams.get("token");
-      if (!token) return respond(response, 400, { error: "token required" });
+      const token = request.headers["x-import-token"];
+      if (typeof token !== "string" || !token) return respond(response, 400, { error: "token required" });
       return respondScript(response, makeFreeSyncScriptV2(url.origin, token));
     }
     if (request.method !== "POST" || requestUrl.pathname !== "/v1/browser-sync") return respond(response, 404, { error: "not found" });
     try {
       const payload = await requestJson(request) as BrowserPayload;
+      if (!payload || typeof payload.token !== "string") throw new Error("token required");
+      // A valid one-time token must be presented before catalog enrichment,
+      // which may load and process thousands of chart records.
+      const discordUserId = db.consumeImportToken(payload.token);
+      if (!discordUserId) return respond(response, 401, { error: "token expired" });
       const parsedProfile = asProfile(payload);
+      if (!parsedProfile.scores.length) {
+        throw new Error("スコアを読み取れなかったため、既存データは変更しませんでした。");
+      }
       const enrichedScores = await catalog.enrich(parsedProfile.scores);
       // Keep every collected chart. Besides rendering Best 15 + 35 now, this
       // allows future commands to calculate charts that are close to entering
       // a best frame without requiring the player to sync again.
       const profile = { ...parsedProfile, scores: enrichedScores };
-      const discordUserId = db.consumeImportToken(payload.token);
-      if (!discordUserId) return respond(response, 401, { error: "token expired" });
       db.importProfile(discordUserId, profile);
       return respond(response, 200, { ok: true, count: profile.scores.length });
     } catch (error) {
@@ -123,9 +136,8 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
 }
 
 export function makeFreeBookmarklet(baseUrl: string, token: string): string {
-  const source = new URL("/v1/free-bookmarklet", baseUrl);
-  source.searchParams.set("token", token);
-  return `javascript:fetch(${JSON.stringify(source.toString())}).then(r=>r.ok?r.text():Promise.reject(Error("script load failed"))).then(s=>Function(s)()).catch(e=>alert("同期スクリプトを開始できませんでした: "+e.message))`;
+  const source = new URL("/v1/free-bookmarklet", baseUrl).toString();
+  return `javascript:fetch(${JSON.stringify(source)},{headers:{"X-Import-Token":${JSON.stringify(token)}}}).then(r=>r.ok?r.text():Promise.reject(Error("script load failed"))).then(s=>Function(s)()).catch(e=>alert("同期スクリプトを開始できませんでした: "+e.message))`;
 }
 
 export function makePremiumBookmarklet(baseUrl: string, token: string): string {
