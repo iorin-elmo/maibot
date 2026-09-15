@@ -61,7 +61,59 @@ test("Standardコース同期用ブックマークレットもDiscord本文に�
   assert.ok(bookmarklet.startsWith("javascript:"));
   assert.ok(bookmarklet.includes("/v1/browser-sync"));
   assert.ok(bookmarklet.includes('redirect:"error"'));
-  assert.ok(bookmarklet.length < 2_000);
+  assert.ok(bookmarklet.includes("div.w_450.m_15,div.screw_block"));
+  assert.ok(!bookmarklet.includes("i<15"));
+  assert.ok(bookmarklet.length < 4_000);
+});
+
+test("Standard bookmarklet assigns ranks within the page's new and old sections", async () => {
+  const bookmarklet = makePremiumBookmarklet("http://127.0.0.1:31337", "test-token");
+  const browser = globalThis as unknown as Record<string, unknown>;
+  const original = { fetch: globalThis.fetch, location: browser.location, document: browser.document, alert: browser.alert };
+  const row = (title: string) => ({
+    classList: { contains: () => false },
+    querySelector: (selector: string) => {
+      if (selector === "div.music_name_block") return { textContent: title };
+      if (selector === "div.music_lv_block") return { textContent: "14" };
+      if (selector === "div.music_score_block") return { textContent: "100.0000%" };
+      if (selector === "img.h_20.f_l") return { getAttribute: () => "master.png" };
+      if (selector === "img.music_kind_icon") return { getAttribute: () => "dx.png" };
+      return null;
+    }
+  });
+  const heading = (textContent: string) => ({ textContent, classList: { contains: (name: string) => name === "screw_block" } });
+  try {
+    let resolveAlert: ((message: string) => void) | undefined;
+    const alerted = new Promise<string>((resolve) => { resolveAlert = resolve; });
+    let payload: { scores: Array<{ title: string; chartKind: string; officialRank: number }> } | undefined;
+    browser.location = { hostname: "maimaidx.jp" };
+    browser.document = {
+      querySelectorAll: (selector: string) => selector === "div.w_450.m_15,div.screw_block"
+        ? [heading("新曲ベスト"), row("Only New"), heading("旧曲ベスト"), row("First Old"), row("Second Old")]
+        : [],
+      querySelector: (selector: string) => selector === "div.rating_block" ? { textContent: "12345" }
+        : selector === "div.name_block" ? { textContent: "Fixture Player" } : null
+    };
+    browser.alert = (message: unknown) => resolveAlert?.(String(message));
+    globalThis.fetch = (async (_input: string | URL, init?: RequestInit) => {
+      assert.equal((init?.headers as Record<string, string>)["X-Import-Token"], "test-token");
+      payload = JSON.parse(String(init?.body));
+      return { ok: true, json: async () => ({ count: payload?.scores.length ?? 0 }) } as Response;
+    }) as typeof fetch;
+
+    Function(bookmarklet.slice("javascript:".length))();
+    await Promise.race([alerted, new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Standard bookmarklet did not finish")), 1_000))]);
+    assert.deepEqual(payload?.scores.map(({ title, chartKind, officialRank }) => ({ title, chartKind, officialRank })), [
+      { title: "Only New", chartKind: "new", officialRank: 1 },
+      { title: "First Old", chartKind: "old", officialRank: 1 },
+      { title: "Second Old", chartKind: "old", officialRank: 2 }
+    ]);
+  } finally {
+    globalThis.fetch = original.fetch;
+    browser.location = original.location;
+    browser.document = original.document;
+    browser.alert = original.alert;
+  }
 });
 
 test("無料同期の空・不足スナップショットは保存済み譜面を置き換えない", async () => {
