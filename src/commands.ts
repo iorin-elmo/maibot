@@ -2,7 +2,7 @@ import {
   AttachmentBuilder, EmbedBuilder, SlashCommandBuilder, type ChatInputCommandInteraction, type SlashCommandIntegerOption, type SlashCommandStringOption
 } from "discord.js";
 import { achievementRank, bestCandidates, bestScores, type BestCandidate } from "./analysis.js";
-import { makeFreeBookmarklet, makePremiumBookmarklet } from "./browser-sync.js";
+import { makeFreeBookmarklet, makePremiumBookmarkletSecure } from "./browser-sync.js";
 import { renderBestImage } from "./best-image.js";
 import type { BotDatabase } from "./database.js";
 import { truncateSongTitle } from "./text.js";
@@ -112,7 +112,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   if (subcommand === "sync" || subcommand === "fsync") {
     const token = db.createImportToken(interaction.user.id);
     const freeCourse = subcommand === "fsync";
-    const bookmarklet = freeCourse ? makeFreeBookmarklet(importBaseUrl, token) : makePremiumBookmarklet(importBaseUrl, token);
+    const bookmarklet = freeCourse ? makeFreeBookmarklet(importBaseUrl, token) : makePremiumBookmarkletSecure(importBaseUrl, token);
     const instructions = freeCourse
       ? "maimai DX NETへログイン済みのブラウザで、任意のページから実行してください。全難易度の楽曲スコアを取得してBest 50を計算します。"
       : "maimai DX NETへログイン済みのブラウザで、でらっくすRatingページを開いて実行してください。公式のBest 50を同期します。";

@@ -5,7 +5,7 @@ import type { BotDatabase } from "./database.js";
 import type { ChartKind, ImportedProfile } from "./types.js";
 
 interface BrowserScore { title: string; difficulty: string; level?: string; achievements?: number; chartKind: ChartKind; chartType: "dx" | "standard"; }
-interface BrowserPayload { token: string; playerName: string; rating: number; scores: BrowserScore[]; }
+interface BrowserPayload { playerName: string; rating: number; scores: BrowserScore[]; }
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://maimaidx.jp",
@@ -25,8 +25,14 @@ async function requestJson(request: IncomingMessage): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 function asProfile(payload: BrowserPayload): ImportedProfile {
-  if (typeof payload.token !== "string" || typeof payload.playerName !== "string" || !Number.isFinite(payload.rating) || !Array.isArray(payload.scores)) throw new Error("同期データの形式が正しくありません。");
+  if (typeof payload.playerName !== "string" || !Number.isFinite(payload.rating) || !Array.isArray(payload.scores)) throw new Error("同期データの形式が正しくありません。");
   return validateProfile({ playerName: payload.playerName, rating: payload.rating, updatedAt: new Date().toISOString(), scores: payload.scores.map((score) => ({ ...score, rating: 0 })) });
+}
+
+function makeFreeSyncScriptWithHeader(baseUrl: string, token: string): string {
+  return makeFreeSyncScript(baseUrl, token)
+    .replace('headers:{"Content-Type":"application/json"}', 'headers:{"Content-Type":"application/json","X-Import-Token":token}')
+    .replace('JSON.stringify({token,playerName', 'JSON.stringify({playerName');
 }
 
 /** The only free-course scraper served to browsers. */
@@ -50,14 +56,15 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
     if (request.method === "GET" && requestUrl.pathname === "/v1/free-bookmarklet") {
       const token = request.headers["x-import-token"];
       if (typeof token !== "string" || !token) return respond(response, 400, { error: "token required" });
-      return respondScript(response, makeFreeSyncScript(url.origin, token));
+      return respondScript(response, makeFreeSyncScriptWithHeader(url.origin, token));
     }
     if (request.method !== "POST" || requestUrl.pathname !== "/v1/browser-sync") return respond(response, 404, { error: "not found" });
+    const token = request.headers["x-import-token"];
+    if (typeof token !== "string" || !token) return respond(response, 401, { error: "token required" });
+    const discordUserId = db.consumeImportToken(token);
+    if (!discordUserId) return respond(response, 401, { error: "token expired" });
     try {
       const payload = await requestJson(request) as BrowserPayload;
-      if (!payload || typeof payload.token !== "string") throw new Error("token required");
-      const discordUserId = db.consumeImportToken(payload.token);
-      if (!discordUserId) return respond(response, 401, { error: "token expired" });
       const parsedProfile = asProfile(payload);
       if (!parsedProfile.scores.length) throw new Error("スコアを読み取れなかったため、既存データは変更しませんでした。");
       const account = db.getAccount(discordUserId);
@@ -73,7 +80,13 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
 }
 export function makeFreeBookmarklet(baseUrl: string, token: string): string {
   const source = new URL("/v1/free-bookmarklet", baseUrl).toString();
-  return `javascript:fetch(${JSON.stringify(source)},{headers:{"X-Import-Token":${JSON.stringify(token)}}}).then(r=>r.ok?r.text():Promise.reject(Error("script load failed"))).then(s=>Function(s)()).catch(e=>alert("同期スクリプトを開始できませんでした: "+e.message))`;
+  return `javascript:(()=>{if(location.hostname!=="maimaidx.jp"){alert("maimai DX NET上で実行してください。");return}fetch(${JSON.stringify(source)},{headers:{"X-Import-Token":${JSON.stringify(token)}}}).then(r=>r.ok?r.text():Promise.reject(Error("script load failed"))).then(s=>Function(s)()).catch(e=>alert("同期スクリプトを開始できませんでした: "+e.message))})()`;
+}
+
+export function makePremiumBookmarkletSecure(baseUrl: string, token: string): string {
+  return makePremiumBookmarklet(baseUrl, token)
+    .replace('headers:{"Content-Type":"application/json"}', 'headers:{"Content-Type":"application/json","X-Import-Token":t}')
+    .replace('JSON.stringify({token:t,playerName:name', 'JSON.stringify({playerName:name');
 }
 export function makePremiumBookmarklet(baseUrl: string, token: string): string {
   const endpoint = new URL("/v1/browser-sync", baseUrl).toString();
