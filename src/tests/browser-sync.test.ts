@@ -70,9 +70,8 @@ test("無料同期の空・不足スナップショットは保存済み譜面�
   const port = await unusedPort();
   const origin = `http://127.0.0.1:${port}`;
   const catalog = {
-    enrich: async (scores: Array<{ rating: number; chartKind?: "unknown" | "new" | "old" }>) => scores.map((score, index) => ({
-      ...score, rating: 300 - index, internalLevel: 14, chartKind: index === 0 ? "new" : "old"
-    }))
+    enrich: async (scores: Array<{ title: string; rating: number; chartKind?: "unknown" | "new" | "old" }>) => scores.map((score, index) =>
+      score.title === "Unmatched" ? score : { ...score, rating: 300 - index, internalLevel: 14, chartKind: index === 0 ? "new" : "old" })
   } as unknown as MaimaiCatalog;
   const stop = startBrowserSyncServer(origin, "127.0.0.1", port, db, catalog);
   const payload = {
@@ -101,16 +100,30 @@ test("無料同期の空・不足スナップショットは保存済み譜面�
     db.importProfile("discord-user", {
       playerName: "Free snapshot", rating: 1000,
       scores: Array.from({ length: 16 }, (_, index) => ({
-        title: `Outside ${index}`, difficulty: "MASTER", rating: 250 - index, chartKind: "new" as const, chartType: "dx" as const
+        title: index === 15 ? "Unmatched" : `Outside ${index}`, difficulty: "MASTER", level: "14", rating: 250 - index,
+        chartKind: "new" as const, chartType: "dx" as const, officialRank: index === 0 ? 1 : undefined
       }))
     });
     const standard = await postWithRetry(`${origin}/v1/browser-sync`, db.createImportToken("discord-user"), {
       playerName: "Standard", rating: 1100,
-      scores: [{ title: "Standard Best", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx" }]
+      scores: [
+        { title: "Standard Best", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx", officialRank: 1 },
+        { title: "Unmatched", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx", officialRank: 2 }
+      ]
     });
     assert.equal(standard.status, 200);
     assert.equal(db.getScores("discord-user").length, 17);
-    assert.ok(db.getScores("discord-user").some((score) => score.title === "Outside 15"));
+    assert.equal(db.getScores("discord-user").find((score) => score.title === "Unmatched")?.rating, 235);
+    assert.equal(db.getScores("discord-user").find((score) => score.title === "Unmatched")?.officialRank, undefined);
+    assert.equal(db.getScores("discord-user").find((score) => score.title === "Outside 0")?.officialRank, undefined);
+    assert.equal(db.getScores("discord-user").find((score) => score.title === "Standard Best")?.officialRank, 1);
+
+    const allUnmatched = await postWithRetry(`${origin}/v1/browser-sync`, db.createImportToken("discord-user"), {
+      playerName: "Standard", rating: 1200,
+      scores: [{ title: "Unmatched", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx", officialRank: 1 }]
+    });
+    assert.equal(allUnmatched.status, 400);
+    assert.equal(db.getScores("discord-user").find((score) => score.title === "Standard Best")?.officialRank, 1);
   } finally {
     stop();
     db.close();
@@ -209,6 +222,48 @@ test("生成した無料同期スクリプトは全難易度を収集し、異�
     browser.document = original.document;
     browser.DOMParser = original.DOMParser;
     browser.alert = original.alert;
+    stop();
+    db.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("同一ユーザーの無料同期と通常同期は到着順に保存する", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "maibot-import-order-"));
+  const db = new BotDatabase(join(directory, "test.sqlite"));
+  const port = await unusedPort();
+  const origin = `http://127.0.0.1:${port}`;
+  let releaseFree: (() => void) | undefined;
+  const freeCanFinish = new Promise<void>((resolve) => { releaseFree = resolve; });
+  let signalFreeStarted: (() => void) | undefined;
+  const freeStarted = new Promise<void>((resolve) => { signalFreeStarted = resolve; });
+  const catalog = {
+    enrich: async (scores: Array<{ chartKind?: "unknown" | "new" | "old"; rating: number }>) => {
+      if (scores[0]?.chartKind === "unknown") {
+        signalFreeStarted?.();
+        await freeCanFinish;
+      }
+      return scores.map((score) => ({ ...score, rating: 300, internalLevel: 14, chartKind: "new" as const }));
+    }
+  } as unknown as MaimaiCatalog;
+  const stop = startBrowserSyncServer(origin, "127.0.0.1", port, db, catalog);
+  try {
+    const freeImport = postWithRetry(`${origin}/v1/browser-sync`, db.createImportToken("discord-user"), {
+      playerName: "Player", rating: 1000,
+      scores: [{ title: "Slow Free", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "unknown", chartType: "dx" }]
+    });
+    await freeStarted;
+    const standardImport = postWithRetry(`${origin}/v1/browser-sync`, db.createImportToken("discord-user"), {
+      playerName: "Player", rating: 1100,
+      scores: [{ title: "Standard Best", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx", officialRank: 1 }]
+    });
+    releaseFree?.();
+    assert.equal((await freeImport).status, 200);
+    assert.equal((await standardImport).status, 200);
+    const scores = db.getScores("discord-user");
+    assert.deepEqual(scores.map((score) => score.title).sort(), ["Slow Free", "Standard Best"]);
+    assert.equal(scores.find((score) => score.title === "Standard Best")?.officialRank, 1);
+  } finally {
     stop();
     db.close();
     rmSync(directory, { recursive: true, force: true });

@@ -4,8 +4,10 @@ import type { MaimaiCatalog } from "./catalog.js";
 import type { BotDatabase } from "./database.js";
 import type { ChartKind, ImportedProfile } from "./types.js";
 
-interface BrowserScore { title: string; difficulty: string; level?: string; achievements?: number; chartKind: ChartKind; chartType: "dx" | "standard"; }
+interface BrowserScore { title: string; difficulty: string; level?: string; achievements?: number; chartKind: ChartKind; chartType: "dx" | "standard"; officialRank?: number; }
 interface BrowserPayload { playerName: string; rating: number; scores: BrowserScore[]; }
+
+const importQueues = new Map<string, Promise<void>>();
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://maimaidx.jp",
@@ -34,9 +36,27 @@ function scoreKey(score: ImportedProfile["scores"][number]): string {
 }
 
 function mergeStandardScores(existing: ImportedProfile["scores"], incoming: ImportedProfile["scores"]): ImportedProfile["scores"] {
-  const merged = new Map(existing.map((score) => [scoreKey(score), score]));
-  for (const score of incoming) merged.set(scoreKey(score), score);
+  // Only the currently received Standard rows have official ranks.  A chart
+  // which dropped out of the current 50 must return to normal rating sorting.
+  const merged = new Map<string, ImportedProfile["scores"][number]>(
+    existing.map((score) => [scoreKey(score), { ...score, officialRank: undefined }])
+  );
+  // A stale catalogue can leave a Standard row at rating 0. Keep a usable
+  // free-sync row for that chart instead of replacing it with unusable data.
+  for (const score of incoming) if (score.internalLevel !== undefined) merged.set(scoreKey(score), score);
   return [...merged.values()];
+}
+
+async function serializeImport<T>(discordUserId: string, task: () => Promise<T>): Promise<T> {
+  const previous = importQueues.get(discordUserId) ?? Promise.resolve();
+  const result = previous.catch(() => undefined).then(task);
+  const tail = result.then(() => undefined, () => undefined);
+  importQueues.set(discordUserId, tail);
+  try {
+    return await result;
+  } finally {
+    if (importQueues.get(discordUserId) === tail) importQueues.delete(discordUserId);
+  }
 }
 
 function makeFreeSyncScriptWithHeader(baseUrl: string, token: string): string {
@@ -80,6 +100,7 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
     const discordUserId = db.consumeImportToken(token);
     if (!discordUserId) return respond(response, 401, { error: "token expired" });
     try {
+      const count = await serializeImport(discordUserId, async () => {
       const payload = await requestJson(request) as BrowserPayload;
       const parsedProfile = asProfile(payload);
       if (!parsedProfile.scores.length) throw new Error("スコアを読み取れなかったため、既存データは変更しませんでした。");
@@ -94,9 +115,14 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
         rating: payload.rating === 0 ? (account.rating ?? parsedProfile.rating) : parsedProfile.rating
       } : parsedProfile;
       const enrichedScores = await catalog.enrich(profile.scores);
+      if (!isFreeSync && !enrichedScores.some((score) => score.internalLevel !== undefined)) {
+        throw new Error("譜面定数を照合できなかったため、既存データは変更しませんでした。");
+      }
       const scores = isFreeSync ? enrichedScores : mergeStandardScores(db.getScores(discordUserId), enrichedScores);
       db.importProfile(discordUserId, { ...profile, scores });
-      return respond(response, 200, { ok: true, count: scores.length });
+      return scores.length;
+      });
+      return respond(response, 200, { ok: true, count });
     } catch (error) { return respond(response, 400, { error: error instanceof Error ? error.message : "invalid request" }); }
   });
   server.listen(listenPort, listenHost); server.on("error", (error) => console.error("Browser sync server failed", error));
