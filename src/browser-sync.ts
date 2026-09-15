@@ -29,6 +29,16 @@ function asProfile(payload: BrowserPayload): ImportedProfile {
   return validateProfile({ playerName: payload.playerName, rating: payload.rating, updatedAt: new Date().toISOString(), scores: payload.scores.map((score) => ({ ...score, rating: 0 })) });
 }
 
+function scoreKey(score: ImportedProfile["scores"][number]): string {
+  return [score.title, score.difficulty, score.level ?? "", score.chartType ?? ""].join("\u0000");
+}
+
+function mergeStandardScores(existing: ImportedProfile["scores"], incoming: ImportedProfile["scores"]): ImportedProfile["scores"] {
+  const merged = new Map(existing.map((score) => [scoreKey(score), score]));
+  for (const score of incoming) merged.set(scoreKey(score), score);
+  return [...merged.values()];
+}
+
 function makeFreeSyncScriptWithHeader(baseUrl: string, token: string): string {
   return makeFreeSyncScript(baseUrl, token)
     .replace('headers:{"Content-Type":"application/json"}', 'headers:{"Content-Type":"application/json","X-Import-Token":token}')
@@ -83,8 +93,10 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
         playerName: payload.playerName === "maimai player" ? (account.playerName ?? parsedProfile.playerName) : parsedProfile.playerName,
         rating: payload.rating === 0 ? (account.rating ?? parsedProfile.rating) : parsedProfile.rating
       } : parsedProfile;
-      db.importProfile(discordUserId, { ...profile, scores: await catalog.enrich(profile.scores) });
-      return respond(response, 200, { ok: true, count: parsedProfile.scores.length });
+      const enrichedScores = await catalog.enrich(profile.scores);
+      const scores = isFreeSync ? enrichedScores : mergeStandardScores(db.getScores(discordUserId), enrichedScores);
+      db.importProfile(discordUserId, { ...profile, scores });
+      return respond(response, 200, { ok: true, count: scores.length });
     } catch (error) { return respond(response, 400, { error: error instanceof Error ? error.message : "invalid request" }); }
   });
   server.listen(listenPort, listenHost); server.on("error", (error) => console.error("Browser sync server failed", error));
