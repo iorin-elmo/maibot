@@ -73,7 +73,10 @@ function validateStandardSnapshot(existing: ImportedProfile["scores"], incoming:
       throw new Error("Standard同期の順位に欠落があるため、既存データは変更しませんでした。");
     }
     const existingRankCount = existing.filter((score) => score.chartKind === kind && score.officialRank !== undefined).length;
-    if (sortedRanks.length < existingRankCount) {
+    const frameSize = kind === "new" ? 15 : 35;
+    const existingChartCount = existing.filter((score) => score.chartKind === kind).length;
+    const expectedRankCount = Math.max(existingRankCount, Math.min(frameSize, existingChartCount));
+    if (sortedRanks.length < expectedRankCount) {
       throw new Error("Standard同期の譜面数が前回より少ないため、既存データは変更しませんでした。");
     }
   }

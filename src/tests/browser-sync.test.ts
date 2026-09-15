@@ -110,12 +110,15 @@ test("無料同期の空・不足スナップショットは保存済み譜面�
       playerName: "Standard", rating: 1100,
       scores: [
         { title: "Standard Best", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx", officialRank: 1 },
-        { title: "Standard Runner", difficulty: "MASTER", level: "14", achievements: 99.5, chartKind: "new", chartType: "dx", officialRank: 2 }
+        { title: "Standard Runner", difficulty: "MASTER", level: "14", achievements: 99.5, chartKind: "new", chartType: "dx", officialRank: 2 },
+        ...Array.from({ length: 13 }, (_, index) => ({
+          title: `Standard ${index + 3}`, difficulty: "MASTER", level: "14", achievements: 99, chartKind: "new", chartType: "dx", officialRank: index + 3
+        }))
       ]
     });
     assert.equal(standard.status, 200);
-    assert.equal((await standard.json() as { count: number }).count, 2);
-    assert.equal(db.getScores("discord-user").length, 18);
+    assert.equal((await standard.json() as { count: number }).count, 15);
+    assert.equal(db.getScores("discord-user").length, 31);
     assert.equal(db.getScores("discord-user").find((score) => score.title === "Unmatched")?.rating, 235);
     assert.equal(db.getScores("discord-user").find((score) => score.title === "Unmatched")?.officialRank, undefined);
     assert.equal(db.getScores("discord-user").find((score) => score.title === "Outside 0")?.officialRank, undefined);
