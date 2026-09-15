@@ -58,7 +58,11 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
       if (!discordUserId) return respond(response, 401, { error: "token expired" });
       const parsedProfile = asProfile(payload);
       if (!parsedProfile.scores.length) throw new Error("スコアを読み取れなかったため、既存データは変更しませんでした。");
-      db.importProfile(discordUserId, { ...parsedProfile, scores: await catalog.enrich(parsedProfile.scores) });
+      const account = db.getAccount(discordUserId);
+      const profile = payload.playerName === "maimai player" && payload.rating === 0 && account
+        ? { ...parsedProfile, playerName: account.playerName ?? parsedProfile.playerName, rating: account.rating ?? parsedProfile.rating }
+        : parsedProfile;
+      db.importProfile(discordUserId, { ...profile, scores: await catalog.enrich(profile.scores) });
       return respond(response, 200, { ok: true, count: parsedProfile.scores.length });
     } catch (error) { return respond(response, 400, { error: error instanceof Error ? error.message : "invalid request" }); }
   });

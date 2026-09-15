@@ -22,13 +22,15 @@ function defaultSyncListenPort(importBaseUrl: string): number {
 }
 
 const importBaseUrl = process.env.IMPORT_BASE_URL?.trim() || "http://127.0.0.1:31337";
+const importUrl = new URL(importBaseUrl);
+const defaultSyncListenHost = importUrl.hostname === "::1" || importUrl.hostname === "[::1]" ? "::1" : "127.0.0.1";
 
 export const config = {
   discordToken: required("DISCORD_TOKEN"),
   guildId: process.env.DISCORD_GUILD_ID?.trim(),
   databasePath: process.env.DATABASE_PATH?.trim() || "./data/maibot.sqlite",
   importBaseUrl,
-  syncListenHost: process.env.SYNC_LISTEN_HOST?.trim() || "127.0.0.1",
+  syncListenHost: process.env.SYNC_LISTEN_HOST?.trim() || defaultSyncListenHost,
   syncListenPort: port("SYNC_LISTEN_PORT", defaultSyncListenPort(importBaseUrl)),
   dxdataUrl: process.env.DXDATA_URL?.trim() || "https://miruku.dxrating.net/api/v1/dxdata"
 };
