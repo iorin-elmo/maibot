@@ -114,8 +114,8 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     const freeCourse = subcommand === "fsync";
     const bookmarklet = freeCourse ? makeFreeBookmarklet(importBaseUrl, token) : makePremiumBookmarklet(importBaseUrl, token);
     const instructions = freeCourse
-      ? "PC上でmaimai DX NETへログイン後、任意のページで実行すると、レコード＞楽曲スコア＞versionの全スコアを取得してBest 50を計算します。無料コースでも使えます。"
-      : "PC上でmaimai DX NETへログイン後、でらっくすRatingページを開いて実行すると、公式のBest 50を同期します。Standardコース向けです。";
+      ? "maimai DX NETへログイン済みのブラウザで、任意のページから実行してください。全難易度の楽曲スコアを取得してBest 50を計算します。"
+      : "maimai DX NETへログイン済みのブラウザで、でらっくすRatingページを開いて実行してください。公式のBest 50を同期します。";
     await interaction.reply({
       content: `下のコード全体をコピーして、ブラウザのブックマークURL欄に貼り付けてください。${instructions}\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのリンクは10分間・1回だけ有効です。SEGA ID・パスワードは送信されません。`,
       ephemeral: true
@@ -125,7 +125,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
 
   const account = db.getAccount(interaction.user.id);
   if (!account || account.rating === null) {
-    await interaction.reply({ content: "先に `/maimai sync` でベスト枠を同期してください。", ephemeral: true });
+    await interaction.reply({ content: "先に Standardコースなら `/maimai sync`、無料コースなら `/maimai fsync` でベスト枠を同期してください。", ephemeral: true });
     return;
   }
 
@@ -153,7 +153,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
 
   const scores = kind === "new" ? newBest : kind === "old" ? oldBest : [...newBest, ...oldBest];
   if (!scores.length) {
-    await interaction.reply({ content: "表示できるベスト枠がありません。`/maimai sync` をやり直してください。", ephemeral: true });
+    await interaction.reply({ content: "表示できるベスト枠がありません。Standardコースなら `/maimai sync`、無料コースなら `/maimai fsync` をやり直してください。", ephemeral: true });
     return;
   }
 
