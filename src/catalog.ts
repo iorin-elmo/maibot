@@ -65,9 +65,15 @@ export class MaimaiCatalog {
         && latestVersionIds.every((version): version is string => version !== undefined)
         && new Set(latestVersionIds).size === 2;
       const newestVersions = hasTwoDistinctVersions ? new Set(latestVersionIds) : new Set<string>();
-      this.loadedAt = Date.now();
-      this.cached = { index, newestVersions };
-      return this.cached;
+      const loaded = { index, newestVersions };
+      // Standard sync does not need version metadata.  Do not cache malformed
+      // metadata, however: free sync should retry the upstream catalogue as
+      // soon as it recovers instead of being blocked for the full TTL.
+      if (hasTwoDistinctVersions) {
+        this.loadedAt = Date.now();
+        this.cached = loaded;
+      }
+      return loaded;
     })().finally(() => { this.loadPromise = undefined; });
     return this.loadPromise;
   }
