@@ -32,7 +32,8 @@ function asProfile(payload: BrowserPayload): ImportedProfile {
 function makeFreeSyncScriptWithHeader(baseUrl: string, token: string): string {
   return makeFreeSyncScript(baseUrl, token)
     .replace('headers:{"Content-Type":"application/json"}', 'headers:{"Content-Type":"application/json","X-Import-Token":token}')
-    .replace('JSON.stringify({token,playerName', 'JSON.stringify({playerName');
+    .replace('JSON.stringify({token,playerName', 'JSON.stringify({playerName')
+    .replace('fetch(url)', 'fetch(url,{redirect:"error"})');
 }
 
 /** The only free-course scraper served to browsers. */
@@ -88,7 +89,8 @@ export function makeFreeBookmarklet(baseUrl: string, token: string): string {
 export function makePremiumBookmarkletSecure(baseUrl: string, token: string): string {
   return makePremiumBookmarkletInsecure(baseUrl, token)
     .replace('headers:{"Content-Type":"application/json"}', 'headers:{"Content-Type":"application/json","X-Import-Token":t}')
-    .replace('JSON.stringify({token:t,playerName:name', 'JSON.stringify({playerName:name');
+    .replace('JSON.stringify({token:t,playerName:name', 'JSON.stringify({playerName:name')
+    .replace('}).filter(Boolean);if(!rows.length)', '}).filter(Boolean).map((row,index)=>({...row,chartKind:index<15?"new":"old",officialRank:index<15?index+1:index-14}));if(!rows.length)');
 }
 
 export function makePremiumBookmarklet(baseUrl: string, token: string): string {
