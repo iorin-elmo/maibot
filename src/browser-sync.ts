@@ -33,7 +33,12 @@ function makeFreeSyncScriptWithHeader(baseUrl: string, token: string): string {
   return makeFreeSyncScript(baseUrl, token)
     .replace('headers:{"Content-Type":"application/json"}', 'headers:{"Content-Type":"application/json","X-Import-Token":token}')
     .replace('JSON.stringify({token,playerName', 'JSON.stringify({playerName')
-    .replace('fetch(url)', 'fetch(url,{redirect:"error"})');
+    .replace('fetch(url)', 'fetch(url,{redirect:"error"})')
+    .replace(
+      'scores.push(...rows(new DOMParser().parseFromString(await response.text(),"text/html")))',
+      'const page=new DOMParser().parseFromString(await response.text(),"text/html");if(!page.querySelector(".main_wrapper"))throw Error("スコアページを確認できませんでした。ログイン状態を確認してください。");scores.push(...rows(page))'
+    )
+    .replace('fetch(endpoint,{method:"POST"', 'fetch(endpoint,{method:"POST",redirect:"error"');
 }
 
 /** The only free-course scraper served to browsers. */
@@ -83,13 +88,14 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
 }
 export function makeFreeBookmarklet(baseUrl: string, token: string): string {
   const source = new URL("/v1/free-bookmarklet", baseUrl).toString();
-  return `javascript:(()=>{if(location.hostname!=="maimaidx.jp"){alert("maimai DX NET上で実行してください。");return}fetch(${JSON.stringify(source)},{headers:{"X-Import-Token":${JSON.stringify(token)}}}).then(r=>r.ok?r.text():Promise.reject(Error("script load failed"))).then(s=>Function(s)()).catch(e=>alert("同期スクリプトを開始できませんでした: "+e.message))})()`;
+  return `javascript:(()=>{if(location.hostname!=="maimaidx.jp"){alert("maimai DX NET上で実行してください。");return}fetch(${JSON.stringify(source)},{redirect:"error",headers:{"X-Import-Token":${JSON.stringify(token)}}}).then(r=>r.ok?r.text():Promise.reject(Error("script load failed"))).then(s=>Function(s)()).catch(e=>alert("同期スクリプトを開始できませんでした: "+e.message))})()`;
 }
 
 export function makePremiumBookmarkletSecure(baseUrl: string, token: string): string {
   return makePremiumBookmarkletInsecure(baseUrl, token)
     .replace('headers:{"Content-Type":"application/json"}', 'headers:{"Content-Type":"application/json","X-Import-Token":t}')
-    .replace('JSON.stringify({token:t,playerName:name', 'JSON.stringify({playerName:name');
+    .replace('JSON.stringify({token:t,playerName:name', 'JSON.stringify({playerName:name')
+    .replace('fetch(e,{method:"POST"', 'fetch(e,{method:"POST",redirect:"error"');
 }
 
 export function makePremiumBookmarklet(baseUrl: string, token: string): string {
