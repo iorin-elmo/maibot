@@ -68,9 +68,11 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
       const parsedProfile = asProfile(payload);
       if (!parsedProfile.scores.length) throw new Error("スコアを読み取れなかったため、既存データは変更しませんでした。");
       const account = db.getAccount(discordUserId);
-      const profile = payload.playerName === "maimai player" && payload.rating === 0 && account
-        ? { ...parsedProfile, playerName: account.playerName ?? parsedProfile.playerName, rating: account.rating ?? parsedProfile.rating }
-        : parsedProfile;
+      const profile = account ? {
+        ...parsedProfile,
+        playerName: payload.playerName === "maimai player" ? (account.playerName ?? parsedProfile.playerName) : parsedProfile.playerName,
+        rating: payload.rating === 0 ? (account.rating ?? parsedProfile.rating) : parsedProfile.rating
+      } : parsedProfile;
       db.importProfile(discordUserId, { ...profile, scores: await catalog.enrich(profile.scores) });
       return respond(response, 200, { ok: true, count: parsedProfile.scores.length });
     } catch (error) { return respond(response, 400, { error: error instanceof Error ? error.message : "invalid request" }); }
@@ -84,11 +86,16 @@ export function makeFreeBookmarklet(baseUrl: string, token: string): string {
 }
 
 export function makePremiumBookmarkletSecure(baseUrl: string, token: string): string {
-  return makePremiumBookmarklet(baseUrl, token)
+  return makePremiumBookmarkletInsecure(baseUrl, token)
     .replace('headers:{"Content-Type":"application/json"}', 'headers:{"Content-Type":"application/json","X-Import-Token":t}')
     .replace('JSON.stringify({token:t,playerName:name', 'JSON.stringify({playerName:name');
 }
+
 export function makePremiumBookmarklet(baseUrl: string, token: string): string {
+  return makePremiumBookmarkletSecure(baseUrl, token);
+}
+
+function makePremiumBookmarkletInsecure(baseUrl: string, token: string): string {
   const endpoint = new URL("/v1/browser-sync", baseUrl).toString();
   return `javascript:(()=>{const e=${JSON.stringify(endpoint)},t=${JSON.stringify(token)},n=v=>{const s=String(v??"").replace(/[^0-9.]/g,"");if(!s)return;const x=Number(s);return Number.isFinite(x)?x:undefined};if(location.hostname!=="maimaidx.jp"){alert("maimai DX NET上で実行してください。");return}const rows=[...document.querySelectorAll("div.w_450.m_15")].map((r,i)=>{const q=s=>r.querySelector(s),title=q("div.music_name_block")?.textContent?.trim(),level=q("div.music_lv_block")?.textContent?.trim(),a=n(q("div.music_score_block")?.textContent),src=(q("img.h_20.f_l")?.getAttribute("src")||"").toLowerCase(),d=["remaster","basic","advanced","expert","master"].find(v=>src.includes(v));if(!title||a===undefined||!d)return null;return{title,difficulty:d.toUpperCase(),level,achievements:a,chartKind:i<15?"new":"old",officialRank:i<15?i+1:i-14,chartType:(q("img.music_kind_icon")?.getAttribute("src")||"").includes("standard")?"standard":"dx"}}).filter(Boolean);if(!rows.length){alert("でらっくすRatingページを開いてから実行してください。");return}const rating=n(document.querySelector("div.rating_block")?.textContent)||0,name=document.querySelector("div.name_block")?.textContent?.trim()||"maimai player";fetch(e,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token:t,playerName:name,rating,scores:rows})}).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j.error||"sync failed");alert("Botへ"+j.count+"件を同期しました")}).catch(x=>alert("同期できませんでした: "+x.message))})()`;
 }

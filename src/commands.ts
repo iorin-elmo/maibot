@@ -137,7 +137,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
 
   if (subcommand === "candidate") {
     const count = interaction.options.getInteger("count") ?? 10;
-    if (allScores.length > 0 && allScores.every((score) => score.officialRank !== undefined)) {
+    if (allScores.length <= 50) {
       await interaction.reply({
         content: "候補曲の算出にはBest枠外の譜面も必要です。`/maimai fsync` で全譜面を同期してください。",
         ephemeral: true

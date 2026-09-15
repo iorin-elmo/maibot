@@ -49,6 +49,7 @@ export class MaimaiCatalog {
       }
       const index = new Map<string, CatalogEntry>();
       for (const song of document.songs) for (const sheet of song.sheets ?? []) {
+        if (!Number.isFinite(sheet.internalLevelValue)) throw new Error(`譜面定数が不正です: ${song.title}`);
         const type = sheet.type === "std" ? "standard" : "dx";
         index.set(this.key(song.title, type, sheet.difficulty, sheet.level), {
           internalLevel: sheet.internalLevelValue,
