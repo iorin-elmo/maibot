@@ -28,7 +28,14 @@ async function requestJson(request: IncomingMessage): Promise<unknown> {
 }
 function asProfile(payload: BrowserPayload): ImportedProfile {
   if (typeof payload.playerName !== "string" || !Number.isFinite(payload.rating) || !Array.isArray(payload.scores)) throw new Error("同期データの形式が正しくありません。");
-  return validateProfile({ playerName: payload.playerName, rating: payload.rating, updatedAt: new Date().toISOString(), scores: payload.scores.map((score) => ({ ...score, rating: 0 })) });
+  return validateProfile({
+    playerName: payload.playerName,
+    rating: payload.rating,
+    updatedAt: new Date().toISOString(),
+    scores: payload.scores.map(({ title, difficulty, level, achievements, chartKind, chartType, officialRank }) => ({
+      title, difficulty, level, achievements, chartKind, chartType, officialRank, rating: 0
+    }))
+  });
 }
 
 function scoreKey(score: ImportedProfile["scores"][number]): string {
@@ -64,16 +71,17 @@ function validateStandardSnapshot(existing: ImportedProfile["scores"], incoming:
     throw new Error("Standard同期の譜面区分を確認できなかったため、既存データは変更しませんでした。");
   }
   for (const kind of ["new", "old"] as const) {
+    const frameSize = kind === "new" ? 15 : 35;
     const ranks = incoming.filter((score) => score.chartKind === kind).map((score) => score.officialRank);
     if (ranks.some((rank) => rank === undefined)) {
       throw new Error("Standard同期の順位を確認できなかったため、既存データは変更しませんでした。");
     }
     const sortedRanks = ranks as number[];
-    if (new Set(sortedRanks).size !== sortedRanks.length || sortedRanks.sort((a, b) => a - b).some((rank, index) => rank !== index + 1)) {
+    if (sortedRanks.length > frameSize || new Set(sortedRanks).size !== sortedRanks.length
+      || sortedRanks.sort((a, b) => a - b).some((rank, index) => rank !== index + 1)) {
       throw new Error("Standard同期の順位に欠落があるため、既存データは変更しませんでした。");
     }
     const existingRankCount = existing.filter((score) => score.chartKind === kind && score.officialRank !== undefined).length;
-    const frameSize = kind === "new" ? 15 : 35;
     const existingChartCount = existing.filter((score) => score.chartKind === kind).length;
     const expectedRankCount = Math.max(existingRankCount, Math.min(frameSize, existingChartCount));
     if (sortedRanks.length < expectedRankCount) {

@@ -127,7 +127,7 @@ test("無料同期の空・不足スナップショットは保存済み譜面�
 
     const allUnmatched = await postWithRetry(`${origin}/v1/browser-sync`, db.createImportToken("discord-user"), {
       playerName: "Standard", rating: 1200,
-      scores: [{ title: "Unmatched", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx", officialRank: 1 }]
+      scores: [{ title: "Unmatched", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx", officialRank: 1, internalLevel: 14 }]
     });
     assert.equal(allUnmatched.status, 400);
     assert.equal(db.getScores("discord-user").find((score) => score.title === "Standard Best")?.officialRank, 1);
@@ -137,6 +137,15 @@ test("無料同期の空・不足スナップショットは保存済み譜面�
       scores: [{ title: "Standard Best", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx", officialRank: 1 }]
     });
     assert.equal(truncated.status, 400);
+    assert.equal(db.getScores("discord-user").find((score) => score.title === "Standard Runner")?.officialRank, 2);
+
+    const oversized = await postWithRetry(`${origin}/v1/browser-sync`, db.createImportToken("discord-user"), {
+      playerName: "Standard", rating: 1200,
+      scores: Array.from({ length: 16 }, (_, index) => ({
+        title: `Oversized ${index + 1}`, difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx", officialRank: index + 1
+      }))
+    });
+    assert.equal(oversized.status, 400);
     assert.equal(db.getScores("discord-user").find((score) => score.title === "Standard Runner")?.officialRank, 2);
 
     db.importProfile("legacy-user", {
