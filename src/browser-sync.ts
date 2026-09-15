@@ -89,8 +89,7 @@ export function makeFreeBookmarklet(baseUrl: string, token: string): string {
 export function makePremiumBookmarkletSecure(baseUrl: string, token: string): string {
   return makePremiumBookmarkletInsecure(baseUrl, token)
     .replace('headers:{"Content-Type":"application/json"}', 'headers:{"Content-Type":"application/json","X-Import-Token":t}')
-    .replace('JSON.stringify({token:t,playerName:name', 'JSON.stringify({playerName:name')
-    .replace('}).filter(Boolean);if(!rows.length)', '}).filter(Boolean).map((row,index)=>({...row,chartKind:index<15?"new":"old",officialRank:index<15?index+1:index-14}));if(!rows.length)');
+    .replace('JSON.stringify({token:t,playerName:name', 'JSON.stringify({playerName:name');
 }
 
 export function makePremiumBookmarklet(baseUrl: string, token: string): string {

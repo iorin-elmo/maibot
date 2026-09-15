@@ -31,8 +31,8 @@ npm run dev
 
 1. StandardコースならDiscordで `/maimai sync`、無料コースなら `/maimai fsync` を実行する。
 2. 返信にあるコード全体をコピーし、ブラウザのブックマークURL欄へ貼り付ける。
-3. 同じPCでmaimai DX NETへログインする。
-4. 任意のmaimai DX NETページで作成したブックマークを実行する。
+3. ブックマークレットを実行するブラウザでmaimai DX NETへログインする。
+4. `/maimai fsync` は任意のmaimai DX NETページで、`/maimai sync` は「でらっくすRating」ページで作成したブックマークを実行する。
 
 `/maimai fsync` のブックマークレットは「レコード ＞ 楽曲スコア ＞ version」の全バージョン・全難易度を読み取り、下2バージョンを新曲、それ以前を旧曲としてBest 15・Best 35を計算します。`/maimai sync` はでらっくすRatingページで実行してください。どちらも1回・10分間だけ有効で、同期データは実行したDiscordアカウントに紐付きます。
 
