@@ -41,6 +41,16 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
     assert.equal(newScore.rating, singleChartRating(14.2, 100));
     assert.equal(oldScore.rating, singleChartRating(13.4, 99.5));
     assert.equal(fetchCount, 2);
+
+    document = {
+      versions: [{ version: "old" }, { version: "new-1" }, { version: "new-2" }],
+      songs: [{ title: "Unlisted", version: "not-in-version-list", sheets: [{ type: "dx", difficulty: "MASTER", level: "14", internalLevelValue: 14 }] }]
+    };
+    const unlistedCatalog = new MaimaiCatalog("https://example.invalid/dxdata.json");
+    await assert.rejects(unlistedCatalog.enrich([{
+      title: "Unlisted", difficulty: "MASTER", level: "14", achievements: 100, rating: 0, chartKind: "unknown", chartType: "dx"
+    }]), /譜面定数またはバージョン/);
+    assert.equal(fetchCount, 3);
   } finally {
     globalThis.fetch = originalFetch;
   }

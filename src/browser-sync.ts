@@ -35,13 +35,27 @@ function scoreKey(score: ImportedProfile["scores"][number]): string {
   return [score.title, score.difficulty, score.level ?? "", score.chartType ?? ""].join("\u0000");
 }
 
+function legacyScoreKey(score: ImportedProfile["scores"][number]): string {
+  return [score.title, score.difficulty, score.level ?? ""].join("\u0000");
+}
+
 function mergeStandardScores(existing: ImportedProfile["scores"], incoming: ImportedProfile["scores"]): ImportedProfile["scores"] {
   // Only the currently received Standard rows have official ranks.  A chart
   // which dropped out of the current 50 must return to normal rating sorting.
   const merged = new Map<string, ImportedProfile["scores"][number]>(
-    existing.map((score) => [scoreKey(score), { ...score, officialRank: undefined }])
+    existing.map((score) => [scoreKey(score), { ...score, officialRank: undefined }] as const)
   );
-  for (const score of incoming) merged.set(scoreKey(score), score);
+  for (const score of incoming) {
+    // Pre-chart-type database rows were keyed without dx/standard. Remove the
+    // legacy entry before overlaying the now-typed Standard score.
+    if (score.chartType) {
+      const legacyKey = legacyScoreKey(score);
+      for (const [key, existingScore] of merged) {
+        if (existingScore.chartType === undefined && legacyScoreKey(existingScore) === legacyKey) merged.delete(key);
+      }
+    }
+    merged.set(scoreKey(score), score);
+  }
   return [...merged.values()];
 }
 

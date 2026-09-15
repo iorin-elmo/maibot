@@ -19,6 +19,11 @@ interface CatalogEntry {
   internalLevel: number;
   version?: string;
 }
+interface LoadedCatalog {
+  index: Map<string, CatalogEntry>;
+  newestVersions: Set<string>;
+  knownVersions: Set<string>;
+}
 
 function normalize(value: string): string {
   return value.normalize("NFKC").replace(/[\s　]+/g, "").toLowerCase();
@@ -31,9 +36,10 @@ function versionId(value: unknown): string | undefined {
 }
 
 export class MaimaiCatalog {
-  private loadPromise: Promise<{ index: Map<string, CatalogEntry>; newestVersions: Set<string> }> | undefined;
+  private loadPromise: Promise<LoadedCatalog> | undefined;
   private cachedIndex: Map<string, CatalogEntry> | undefined;
   private cachedNewestVersions: Set<string> | undefined;
+  private cachedKnownVersions: Set<string> | undefined;
   private loadedAt = 0;
   private readonly cacheDurationMs = 6 * 60 * 60 * 1_000;
 
@@ -43,11 +49,15 @@ export class MaimaiCatalog {
     return [normalize(title), type, difficulty.toLowerCase(), normalize(level ?? "")].join("\u0000");
   }
 
-  private async load(needsVersionMetadata: boolean): Promise<{ index: Map<string, CatalogEntry>; newestVersions: Set<string> }> {
+  private async load(needsVersionMetadata: boolean): Promise<LoadedCatalog> {
     const cachedIndex = this.cachedIndex;
     const cacheIsFresh = cachedIndex && Date.now() - this.loadedAt < this.cacheDurationMs;
     if (cacheIsFresh && (!needsVersionMetadata || this.cachedNewestVersions)) {
-      return { index: cachedIndex, newestVersions: this.cachedNewestVersions ?? new Set<string>() };
+      return {
+        index: cachedIndex,
+        newestVersions: this.cachedNewestVersions ?? new Set<string>(),
+        knownVersions: this.cachedKnownVersions ?? new Set<string>()
+      };
     }
     if (!this.loadPromise) this.loadPromise = (async () => {
       const response = await fetch(this.sourceUrl, { signal: AbortSignal.timeout(20_000) });
@@ -63,32 +73,35 @@ export class MaimaiCatalog {
           version: versionId(sheet.version) ?? versionId(song.version)
         });
       }
-      const latestVersionIds = Array.isArray(document.versions)
-        ? document.versions.slice(-2).map((version) => versionId(version?.version))
+      const allVersionIds = Array.isArray(document.versions)
+        ? document.versions.map((version) => versionId(version?.version))
         : [];
+      const latestVersionIds = allVersionIds.slice(-2);
       const hasTwoDistinctVersions = latestVersionIds.length === 2
         && latestVersionIds.every((version): version is string => version !== undefined)
         && new Set(latestVersionIds).size === 2;
       const newestVersions = hasTwoDistinctVersions ? new Set(latestVersionIds) : new Set<string>();
-      const loaded = { index, newestVersions };
+      const knownVersions = new Set(allVersionIds.filter((version): version is string => version !== undefined));
+      const loaded = { index, newestVersions, knownVersions };
       // Standard sync only needs the song index, so cache it independently.
       // Free sync must retry malformed version metadata rather than treating
       // an invalid latest-two split as valid for the full TTL.
       this.loadedAt = Date.now();
       this.cachedIndex = index;
       this.cachedNewestVersions = hasTwoDistinctVersions ? newestVersions : undefined;
+      this.cachedKnownVersions = hasTwoDistinctVersions ? knownVersions : undefined;
       return loaded;
     })().finally(() => { this.loadPromise = undefined; });
     return this.loadPromise;
   }
 
   async enrich(scores: ScoreRecord[]): Promise<ScoreRecord[]> {
-    const { index, newestVersions } = await this.load(scores.some((score) => score.chartKind === "unknown"));
+    const { index, newestVersions, knownVersions } = await this.load(scores.some((score) => score.chartKind === "unknown"));
     return scores.map((score) => {
       const entry = score.chartType
         ? index.get(this.key(score.title, score.chartType, score.difficulty, score.level))
         : undefined;
-      if (score.chartKind === "unknown" && (newestVersions.size !== 2 || !entry || !entry.version || score.achievements === undefined)) {
+      if (score.chartKind === "unknown" && (newestVersions.size !== 2 || !entry || !entry.version || !knownVersions.has(entry.version) || score.achievements === undefined)) {
         throw new Error(`譜面定数またはバージョンを照合できませんでした: ${score.title}`);
       }
       if (!entry || score.achievements === undefined) return score;

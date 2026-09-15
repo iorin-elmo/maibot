@@ -135,6 +135,17 @@ test("無料同期の空・不足スナップショットは保存済み譜面�
     });
     assert.equal(truncated.status, 400);
     assert.equal(db.getScores("discord-user").find((score) => score.title === "Standard Runner")?.officialRank, 2);
+
+    db.importProfile("legacy-user", {
+      playerName: "Legacy", rating: 900,
+      scores: [{ title: "Legacy Song", difficulty: "MASTER", level: "14", rating: 200, chartKind: "new" }]
+    });
+    const legacy = await postWithRetry(`${origin}/v1/browser-sync`, db.createImportToken("legacy-user"), {
+      playerName: "Legacy", rating: 1000,
+      scores: [{ title: "Legacy Song", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx", officialRank: 1 }]
+    });
+    assert.equal(legacy.status, 200);
+    assert.deepEqual(db.getScores("legacy-user").map((score) => score.chartType), ["dx"]);
   } finally {
     stop();
     db.close();
