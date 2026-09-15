@@ -120,7 +120,7 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
       }
       const scores = isFreeSync ? enrichedScores : mergeStandardScores(db.getScores(discordUserId), enrichedScores);
       db.importProfile(discordUserId, { ...profile, scores });
-      return scores.length;
+      return parsedProfile.scores.length;
       });
       return respond(response, 200, { ok: true, count });
     } catch (error) { return respond(response, 400, { error: error instanceof Error ? error.message : "invalid request" }); }

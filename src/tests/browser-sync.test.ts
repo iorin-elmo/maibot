@@ -112,6 +112,7 @@ test("無料同期の空・不足スナップショットは保存済み譜面�
       ]
     });
     assert.equal(standard.status, 200);
+    assert.equal((await standard.json() as { count: number }).count, 2);
     assert.equal(db.getScores("discord-user").length, 17);
     assert.equal(db.getScores("discord-user").find((score) => score.title === "Unmatched")?.rating, 235);
     assert.equal(db.getScores("discord-user").find((score) => score.title === "Unmatched")?.officialRank, undefined);
