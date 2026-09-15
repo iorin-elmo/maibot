@@ -78,8 +78,12 @@ function renderCandidate(candidate: BestCandidate, index: number): string {
   return `**#${String(index + 1).padStart(2, "0")}** +${candidate.achievementGap.toFixed(4)}% → ${candidate.nextRank} ${candidate.nextAchievement.toFixed(4)}% / ${constant} ${candidate.ratingAtNextRank} / ${truncateSongTitle(score.title)}`;
 }
 
-function candidateEmbeds(playerName: string, kind: "new" | "old", candidates: BestCandidate[]): EmbedBuilder[] {
+function candidateEmbeds(playerName: string, kind: "new" | "old", candidates: BestCandidate[], hasOutsideCharts: boolean): EmbedBuilder[] {
   const label = kind === "new" ? "新曲枠の候補" : "旧曲枠の候補";
+  if (!hasOutsideCharts) return [new EmbedBuilder()
+    .setColor(0xff5a9e)
+    .setTitle(`${playerName} の${label}`)
+    .setDescription("候補を算出するにはBest枠外の譜面も必要です。`/maimai fsync` で全譜面を同期してください。")];
   if (!candidates.length) return [new EmbedBuilder()
     .setColor(0xff5a9e)
     .setTitle(`${playerName} の${label}`)
@@ -139,16 +143,10 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     const count = interaction.options.getInteger("count") ?? 10;
     const requestedKinds: Array<"new" | "old"> = kind === "new" ? ["new"] : kind === "old" ? ["old"] : ["new", "old"];
     const frameSizes = { new: 15, old: 35 } as const;
-    if (requestedKinds.some((candidateKind) => allScores.filter((score) => score.chartKind === candidateKind).length <= frameSizes[candidateKind])) {
-      await interaction.reply({
-        content: "候補曲の算出にはBest枠外の譜面も必要です。`/maimai fsync` で全譜面を同期してください。",
-        ephemeral: true
-      });
-      return;
-    }
-    const kinds = requestedKinds;
-    const embeds = kinds.flatMap((candidateKind) =>
-      candidateEmbeds(playerName, candidateKind, bestCandidates(allScores, candidateKind, count)));
+    const embeds = requestedKinds.flatMap((candidateKind) => {
+      const hasOutsideCharts = allScores.filter((score) => score.chartKind === candidateKind).length > frameSizes[candidateKind];
+      return candidateEmbeds(playerName, candidateKind, bestCandidates(allScores, candidateKind, count), hasOutsideCharts);
+    });
     await interaction.reply({ embeds });
     return;
   }
