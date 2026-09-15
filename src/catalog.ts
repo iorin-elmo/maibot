@@ -43,10 +43,6 @@ export class MaimaiCatalog {
       if (!response.ok) throw new Error("譜面定数データを取得できませんでした。");
       const document = await response.json() as CatalogDocument;
       if (!Array.isArray(document.songs)) throw new Error("譜面定数データの形式が不正です。");
-      if (!Array.isArray(document.versions) || document.versions.length < 2
-        || document.versions.some((version) => typeof version?.version !== "string" || !version.version)) {
-        throw new Error("譜面定数データに最新バージョン情報がありません。");
-      }
       const index = new Map<string, CatalogEntry>();
       for (const song of document.songs) for (const sheet of song.sheets ?? []) {
         if (!Number.isFinite(sheet.internalLevelValue)) throw new Error(`譜面定数が不正です: ${song.title}`);
@@ -56,8 +52,7 @@ export class MaimaiCatalog {
           version: sheet.version ?? song.version
         });
       }
-      const newestVersions = new Set(document.versions.slice(-2).map((version) => version.version));
-      if (newestVersions.size !== 2) throw new Error("譜面定数データの最新バージョン情報が重複しています。");
+      const newestVersions = new Set((document.versions ?? []).slice(-2).map((version) => version.version));
       this.loadedAt = Date.now();
       this.cached = { index, newestVersions };
       return this.cached;
@@ -71,7 +66,7 @@ export class MaimaiCatalog {
       const entry = score.chartType
         ? index.get(this.key(score.title, score.chartType, score.difficulty, score.level))
         : undefined;
-      if (score.chartKind === "unknown" && (!entry || !entry.version || score.achievements === undefined)) {
+      if (score.chartKind === "unknown" && (newestVersions.size !== 2 || !entry || !entry.version || score.achievements === undefined)) {
         throw new Error(`譜面定数またはバージョンを照合できませんでした: ${score.title}`);
       }
       if (!entry || score.achievements === undefined) return score;

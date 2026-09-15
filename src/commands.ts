@@ -137,14 +137,16 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
 
   if (subcommand === "candidate") {
     const count = interaction.options.getInteger("count") ?? 10;
-    if (allScores.length <= 50) {
+    const requestedKinds: Array<"new" | "old"> = kind === "new" ? ["new"] : kind === "old" ? ["old"] : ["new", "old"];
+    const frameSizes = { new: 15, old: 35 } as const;
+    if (requestedKinds.some((candidateKind) => allScores.filter((score) => score.chartKind === candidateKind).length <= frameSizes[candidateKind])) {
       await interaction.reply({
         content: "候補曲の算出にはBest枠外の譜面も必要です。`/maimai fsync` で全譜面を同期してください。",
         ephemeral: true
       });
       return;
     }
-    const kinds: Array<"new" | "old"> = kind === "new" ? ["new"] : kind === "old" ? ["old"] : ["new", "old"];
+    const kinds = requestedKinds;
     const embeds = kinds.flatMap((candidateKind) =>
       candidateEmbeds(playerName, candidateKind, bestCandidates(allScores, candidateKind, count)));
     await interaction.reply({ embeds });
