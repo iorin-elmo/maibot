@@ -131,8 +131,8 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
 
   const kind = interaction.options.getString("kind") ?? "all";
   const allScores = db.getScores(interaction.user.id);
-  const newBest = bestScores(allScores, "new", 15);
-  const oldBest = bestScores(allScores, "old", 35);
+  const newBest = bestScores(allScores, "new", 15).map((score, index) => ({ ...score, officialRank: score.officialRank ?? index + 1 }));
+  const oldBest = bestScores(allScores, "old", 35).map((score, index) => ({ ...score, officialRank: score.officialRank ?? index + 1 }));
   const playerName = account.playerName ?? "maimai";
 
   if (subcommand === "candidate") {

@@ -17,7 +17,11 @@ function port(name: string, fallback: number): number {
 function defaultSyncListenPort(importBaseUrl: string): number {
   const url = new URL(importBaseUrl);
   const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
-  if (url.protocol === "http:" && loopbackHosts.has(url.hostname)) return url.port ? Number(url.port) : 80;
+  if (url.protocol === "http:" && loopbackHosts.has(url.hostname)) {
+    const listenPort = url.port ? Number(url.port) : 80;
+    if (!Number.isInteger(listenPort) || listenPort < 1 || listenPort > 65_535) throw new Error("IMPORT_BASE_URL のポート番号が不正です。");
+    return listenPort;
+  }
   return 31337;
 }
 

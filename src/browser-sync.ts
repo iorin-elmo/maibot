@@ -43,7 +43,9 @@ function validateImportBaseUrl(url: URL): void {
 export function startBrowserSyncServer(baseUrl: string, listenHost: string, listenPort: number, db: BotDatabase, catalog: MaimaiCatalog): () => void {
   const url = new URL(baseUrl); validateImportBaseUrl(url);
   const server = createServer(async (request, response) => {
-    const requestUrl = new URL(request.url ?? "/", url);
+    let requestUrl: URL;
+    try { requestUrl = new URL(request.url ?? "/", url); }
+    catch { return respond(response, 400, { error: "invalid request URL" }); }
     if (request.method === "OPTIONS") return respond(response, 204, {});
     if (request.method === "GET" && requestUrl.pathname === "/v1/free-bookmarklet") {
       const token = request.headers["x-import-token"];
