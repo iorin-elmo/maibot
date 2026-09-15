@@ -73,6 +73,10 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
       const payload = await requestJson(request) as BrowserPayload;
       const parsedProfile = asProfile(payload);
       if (!parsedProfile.scores.length) throw new Error("スコアを読み取れなかったため、既存データは変更しませんでした。");
+      const isFreeSync = parsedProfile.scores.every((score) => score.chartKind === "unknown");
+      if (isFreeSync && db.getScores(discordUserId).length > parsedProfile.scores.length) {
+        throw new Error("前回より少ない譜面数しか取得できなかったため、既存データは変更しませんでした。");
+      }
       const account = db.getAccount(discordUserId);
       const profile = account ? {
         ...parsedProfile,
