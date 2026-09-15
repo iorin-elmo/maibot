@@ -71,7 +71,9 @@ test("無料同期の空・不足スナップショットは保存済み譜面�
   const origin = `http://127.0.0.1:${port}`;
   const catalog = {
     enrich: async (scores: Array<{ title: string; rating: number; chartKind?: "unknown" | "new" | "old" }>) => scores.map((score, index) =>
-      score.title === "Unmatched" ? score : { ...score, rating: 300 - index, internalLevel: 14, chartKind: index === 0 ? "new" : "old" })
+      score.title === "Unmatched" ? score : {
+        ...score, rating: 300 - index, internalLevel: 14, chartKind: score.chartKind === "unknown" ? (index === 0 ? "new" : "old") : score.chartKind
+      })
   } as unknown as MaimaiCatalog;
   const stop = startBrowserSyncServer(origin, "127.0.0.1", port, db, catalog);
   const payload = {
@@ -108,16 +110,17 @@ test("無料同期の空・不足スナップショットは保存済み譜面�
       playerName: "Standard", rating: 1100,
       scores: [
         { title: "Standard Best", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx", officialRank: 1 },
-        { title: "Unmatched", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx", officialRank: 2 }
+        { title: "Standard Runner", difficulty: "MASTER", level: "14", achievements: 99.5, chartKind: "new", chartType: "dx", officialRank: 2 }
       ]
     });
     assert.equal(standard.status, 200);
     assert.equal((await standard.json() as { count: number }).count, 2);
-    assert.equal(db.getScores("discord-user").length, 17);
+    assert.equal(db.getScores("discord-user").length, 18);
     assert.equal(db.getScores("discord-user").find((score) => score.title === "Unmatched")?.rating, 235);
     assert.equal(db.getScores("discord-user").find((score) => score.title === "Unmatched")?.officialRank, undefined);
     assert.equal(db.getScores("discord-user").find((score) => score.title === "Outside 0")?.officialRank, undefined);
     assert.equal(db.getScores("discord-user").find((score) => score.title === "Standard Best")?.officialRank, 1);
+    assert.equal(db.getScores("discord-user").find((score) => score.title === "Standard Runner")?.officialRank, 2);
 
     const allUnmatched = await postWithRetry(`${origin}/v1/browser-sync`, db.createImportToken("discord-user"), {
       playerName: "Standard", rating: 1200,
@@ -125,6 +128,13 @@ test("無料同期の空・不足スナップショットは保存済み譜面�
     });
     assert.equal(allUnmatched.status, 400);
     assert.equal(db.getScores("discord-user").find((score) => score.title === "Standard Best")?.officialRank, 1);
+
+    const truncated = await postWithRetry(`${origin}/v1/browser-sync`, db.createImportToken("discord-user"), {
+      playerName: "Standard", rating: 1200,
+      scores: [{ title: "Standard Best", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "new", chartType: "dx", officialRank: 1 }]
+    });
+    assert.equal(truncated.status, 400);
+    assert.equal(db.getScores("discord-user").find((score) => score.title === "Standard Runner")?.officialRank, 2);
   } finally {
     stop();
     db.close();

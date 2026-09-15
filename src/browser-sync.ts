@@ -41,10 +41,28 @@ function mergeStandardScores(existing: ImportedProfile["scores"], incoming: Impo
   const merged = new Map<string, ImportedProfile["scores"][number]>(
     existing.map((score) => [scoreKey(score), { ...score, officialRank: undefined }])
   );
-  // A stale catalogue can leave a Standard row at rating 0. Keep a usable
-  // free-sync row for that chart instead of replacing it with unusable data.
-  for (const score of incoming) if (score.internalLevel !== undefined) merged.set(scoreKey(score), score);
+  for (const score of incoming) merged.set(scoreKey(score), score);
   return [...merged.values()];
+}
+
+function validateStandardSnapshot(existing: ImportedProfile["scores"], incoming: ImportedProfile["scores"]): void {
+  if (incoming.some((score) => score.chartKind !== "new" && score.chartKind !== "old")) {
+    throw new Error("Standard同期の譜面区分を確認できなかったため、既存データは変更しませんでした。");
+  }
+  for (const kind of ["new", "old"] as const) {
+    const ranks = incoming.filter((score) => score.chartKind === kind).map((score) => score.officialRank);
+    if (ranks.some((rank) => rank === undefined)) {
+      throw new Error("Standard同期の順位を確認できなかったため、既存データは変更しませんでした。");
+    }
+    const sortedRanks = ranks as number[];
+    if (new Set(sortedRanks).size !== sortedRanks.length || sortedRanks.sort((a, b) => a - b).some((rank, index) => rank !== index + 1)) {
+      throw new Error("Standard同期の順位に欠落があるため、既存データは変更しませんでした。");
+    }
+    const existingRankCount = existing.filter((score) => score.chartKind === kind && score.officialRank !== undefined).length;
+    if (sortedRanks.length < existingRankCount) {
+      throw new Error("Standard同期の譜面数が前回より少ないため、既存データは変更しませんでした。");
+    }
+  }
 }
 
 async function serializeImport<T>(discordUserId: string, task: () => Promise<T>): Promise<T> {
@@ -115,10 +133,14 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
         rating: payload.rating === 0 ? (account.rating ?? parsedProfile.rating) : parsedProfile.rating
       } : parsedProfile;
       const enrichedScores = await catalog.enrich(profile.scores);
-      if (!isFreeSync && !enrichedScores.some((score) => score.internalLevel !== undefined)) {
-        throw new Error("譜面定数を照合できなかったため、既存データは変更しませんでした。");
+      const existingScores = db.getScores(discordUserId);
+      if (!isFreeSync) {
+        if (enrichedScores.some((score) => score.internalLevel === undefined)) {
+          throw new Error("譜面定数を照合できなかったため、既存データは変更しませんでした。");
+        }
+        validateStandardSnapshot(existingScores, enrichedScores);
       }
-      const scores = isFreeSync ? enrichedScores : mergeStandardScores(db.getScores(discordUserId), enrichedScores);
+      const scores = isFreeSync ? enrichedScores : mergeStandardScores(existingScores, enrichedScores);
       db.importProfile(discordUserId, { ...profile, scores });
       return parsedProfile.scores.length;
       });
