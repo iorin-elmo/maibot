@@ -24,6 +24,12 @@ function normalize(value: string): string {
   return value.normalize("NFKC").replace(/[\s　]+/g, "").toLowerCase();
 }
 
+function versionId(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
 export class MaimaiCatalog {
   private loadPromise: Promise<{ index: Map<string, CatalogEntry>; newestVersions: Set<string> }> | undefined;
   private cached: { index: Map<string, CatalogEntry>; newestVersions: Set<string> } | undefined;
@@ -49,10 +55,16 @@ export class MaimaiCatalog {
         const type = sheet.type === "std" ? "standard" : "dx";
         index.set(this.key(song.title, type, sheet.difficulty, sheet.level), {
           internalLevel: sheet.internalLevelValue,
-          version: sheet.version ?? song.version
+          version: versionId(sheet.version) ?? versionId(song.version)
         });
       }
-      const newestVersions = new Set((document.versions ?? []).slice(-2).map((version) => version.version));
+      const latestVersionIds = Array.isArray(document.versions)
+        ? document.versions.slice(-2).map((version) => versionId(version?.version))
+        : [];
+      const hasTwoDistinctVersions = latestVersionIds.length === 2
+        && latestVersionIds.every((version): version is string => version !== undefined)
+        && new Set(latestVersionIds).size === 2;
+      const newestVersions = hasTwoDistinctVersions ? new Set(latestVersionIds) : new Set<string>();
       this.loadedAt = Date.now();
       this.cached = { index, newestVersions };
       return this.cached;
