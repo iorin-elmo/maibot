@@ -5,7 +5,7 @@ import { achievementRank, bestCandidates, bestScores, type BestCandidate } from 
 import { makeFreeBookmarklet, makePremiumBookmarkletSecure } from "./browser-sync.js";
 import { renderBestImage } from "./best-image.js";
 import type { BotDatabase } from "./database.js";
-import { truncateSongTitle } from "./text.js";
+import { padDisplayEnd, truncateSongTitle } from "./text.js";
 import type { ScoreRecord } from "./types.js";
 
 const kindOption = (option: SlashCommandStringOption) =>
@@ -43,6 +43,15 @@ function renderMarkdownScore(score: ScoreRecord, index: number, mixed: boolean):
   return `**${prefix}** ${constant} ${rating} / ${achievementRank(score.achievements)} ${achievement} / ${truncateSongTitle(score.title)}`;
 }
 
+function renderBestScore(score: ScoreRecord, index: number, mixed: boolean): string {
+  const rank = String(score.officialRank ?? index + 1).padStart(2, "0");
+  const achievement = typeof score.achievements === "number" ? `${score.achievements.toFixed(4)}%` : "-";
+  const constant = `[${typeof score.internalLevel === "number" ? score.internalLevel.toFixed(1) : "?"}]`;
+  const rating = (typeof score.internalLevel === "number" ? String(score.rating) : "?").padStart(3);
+  const prefix = mixed ? `${score.chartKind === "new" ? "\u65b0" : "\u65e7"}#${rank}` : `#${rank}`;
+  return `${padDisplayEnd(prefix, 5)} ${constant.padEnd(6)} ${rating} / ${achievementRank(score.achievements).padEnd(4)} ${achievement.padStart(9)} / ${truncateSongTitle(score.title)}`;
+}
+
 function renderMobileScore(score: ScoreRecord, index: number): string {
   const rank = String(score.officialRank ?? index + 1).padStart(2, "0");
   const category = score.chartKind === "new" ? "新" : "旧";
@@ -64,12 +73,16 @@ function splitLines(lines: string[], maxLength = 3_800): string[] {
   return chunks;
 }
 
+function asCodeBlock(text: string): string {
+  return `\`\`\`\n${text}\n\`\`\``;
+}
+
 function bestEmbeds(playerName: string, label: string, summary: string, scores: ScoreRecord[], mixed: boolean): EmbedBuilder[] {
-  return splitLines(scores.map((score, index) => renderMarkdownScore(score, index, mixed)), 4_000).map((description, index) =>
+  return splitLines(scores.map((score, index) => renderBestScore(score, index, mixed)), 3_900).map((description, index) =>
     new EmbedBuilder()
       .setColor(0xff5a9e)
       .setTitle(`${playerName} の${label}${index ? "（続き）" : ""}`)
-      .setDescription(`${index ? "" : `**${summary}**\n\n`}${description}`));
+      .setDescription(`${index ? "" : `**${summary}**\n\n`}${asCodeBlock(description)}`));
 }
 
 function renderCandidate(candidate: BestCandidate, index: number): string {

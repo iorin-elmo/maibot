@@ -1,5 +1,15 @@
 const WIDE_CHARACTER = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\u3000-\u303f\uff01-\uff60\uffe0-\uffe6\p{Extended_Pictographic}]/u;
 
+/** Returns terminal-style character cells, so Japanese and emoji occupy two. */
+export function displayWidth(value: string): number {
+  return [...value].reduce((width, character) => width + (WIDE_CHARACTER.test(character) ? 2 : 1), 0);
+}
+
+/** Pads a monospaced line to a fixed visible width. */
+export function padDisplayEnd(value: string, width: number): string {
+  return `${value}${" ".repeat(Math.max(0, width - displayWidth(value)))}`;
+}
+
 /** 曲名を「全角12文字 / 半角20文字」相当の幅に収める。 */
 export function truncateSongTitle(title: string): string {
   const maxWidth = 240;
