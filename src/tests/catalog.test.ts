@@ -55,3 +55,27 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
     globalThis.fetch = originalFetch;
   }
 });
+
+test("無料同期はCiRCLE PLUSとMAGiCALを新曲枠として扱う", async () => {
+  const document = {
+    versions: [{ version: "CiRCLE" }, { version: "CiRCLE PLUS" }, { version: "MAGiCAL" }],
+    songs: [
+      { title: "CiRCLE Song", version: "CiRCLE", sheets: [{ type: "dx", difficulty: "MASTER", level: "14", internalLevelValue: 14 }] },
+      { title: "CiRCLE PLUS Song", version: "CiRCLE PLUS", sheets: [{ type: "dx", difficulty: "MASTER", level: "14", internalLevelValue: 14.1 }] },
+      { title: "MAGiCAL Song", version: "MAGiCAL", sheets: [{ type: "dx", difficulty: "MASTER", level: "14", internalLevelValue: 14.2 }] }
+    ]
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify(document))) as typeof fetch;
+  try {
+    const catalog = new MaimaiCatalog("https://example.invalid/dxdata.json");
+    const scores = await catalog.enrich([
+      { title: "CiRCLE Song", difficulty: "MASTER", level: "14", achievements: 100, rating: 0, chartKind: "unknown", chartType: "dx" },
+      { title: "CiRCLE PLUS Song", difficulty: "MASTER", level: "14", achievements: 100, rating: 0, chartKind: "unknown", chartType: "dx" },
+      { title: "MAGiCAL Song", difficulty: "MASTER", level: "14", achievements: 100, rating: 0, chartKind: "unknown", chartType: "dx" }
+    ]);
+    assert.deepEqual(scores.map((score) => score.chartKind), ["old", "new", "new"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
