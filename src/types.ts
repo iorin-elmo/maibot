@@ -1,4 +1,6 @@
 export type ChartKind = "new" | "old" | "unknown";
+export type ComboStatus = "AP+" | "AP" | "FC+" | "FC";
+export type SyncStatus = "FDX" | "FS";
 
 export interface ScoreRecord {
   title: string;
@@ -8,6 +10,10 @@ export interface ScoreRecord {
   dxScore?: number;
   /** The chart's theoretical maximum DX score. */
   dxScoreMax?: number;
+  /** Highest recorded clear-combo state from DX NET. */
+  comboStatus?: ComboStatus;
+  /** Highest recorded sync state from DX NET. */
+  syncStatus?: SyncStatus;
   /** Stable jacket identifier supplied by the DX data catalogue. */
   jacketImageName?: string;
   rating: number;

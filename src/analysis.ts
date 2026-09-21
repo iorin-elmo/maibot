@@ -172,6 +172,8 @@ export function validateProfile(value: unknown): ImportedProfile {
     if (score.achievements !== undefined && !Number.isFinite(score.achievements)) throw new Error(`scores[${index}].achievements が不正です。`);
     if (score.dxScore !== undefined && (!Number.isInteger(score.dxScore) || score.dxScore < 0)) throw new Error(`scores[${index}].dxScore が不正です。`);
     if (score.dxScoreMax !== undefined && (!Number.isInteger(score.dxScoreMax) || score.dxScoreMax < 1)) throw new Error(`scores[${index}].dxScoreMax が不正です。`);
+    if (score.comboStatus !== undefined && !["AP+", "AP", "FC+", "FC"].includes(score.comboStatus)) throw new Error(`scores[${index}].comboStatus が不正です。`);
+    if (score.syncStatus !== undefined && !["FDX", "FS"].includes(score.syncStatus)) throw new Error(`scores[${index}].syncStatus が不正です。`);
     if (score.chartType !== undefined && score.chartType !== "dx" && score.chartType !== "standard") throw new Error(`scores[${index}].chartType が不正です。`);
     if (score.internalLevel !== undefined && !Number.isFinite(score.internalLevel)) throw new Error(`scores[${index}].internalLevel が不正です。`);
     if (score.chartKind && !["new", "old", "unknown"].includes(score.chartKind)) {
@@ -182,7 +184,7 @@ export function validateProfile(value: unknown): ImportedProfile {
     }
     return {
       title: score.title.trim(), difficulty: score.difficulty.trim(), level: score.level,
-      achievements: score.achievements, dxScore: score.dxScore, dxScoreMax: score.dxScoreMax, rating: score.rating as number,
+      achievements: score.achievements, dxScore: score.dxScore, dxScoreMax: score.dxScoreMax, comboStatus: score.comboStatus, syncStatus: score.syncStatus, rating: score.rating as number,
       chartKind: score.chartKind ?? "unknown", chartType: score.chartType, internalLevel: score.internalLevel,
       officialRank: score.officialRank, playedAt: score.playedAt
     };

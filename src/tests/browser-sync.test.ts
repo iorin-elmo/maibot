@@ -235,7 +235,7 @@ test("生成した無料同期スクリプトは全難易度を収集し、異�
     const script = await scriptResponse.text();
     assert.match(script, /integer=value/);
     const requestedDifficulties: number[] = [];
-    const sentPayloads: Array<{ scores: Array<{ title: string; achievements: number; dxScore?: number; chartType: string }> }> = [];
+    const sentPayloads: Array<{ scores: Array<{ title: string; achievements: number; dxScore?: number; comboStatus?: string; syncStatus?: string; chartType: string }> }> = [];
     let mode: "valid" | "invalid" = "valid";
     let resolvePost: (() => void) | undefined;
     const posted = new Promise<void>((resolve) => { resolvePost = resolve; });
@@ -255,7 +255,8 @@ test("生成した無料同期スクリプトは全難易度を収集し、異�
       },
       querySelectorAll: (selector: string) => selector === ".music_score_block"
         ? [{ textContent: `${achievements}%` }, { textContent: `DX SCORE ${dxScore} / 2193` }]
-        : []
+        : selector === "img" ? [{ getAttribute: () => "music_icon_allperfectplus.png" }, { getAttribute: () => "music_icon_fullsyncdx.png" }]
+          : []
     });
     const scorePage = {
       querySelector: (selector: string) => selector === ".main_wrapper" ? {} : null,
@@ -300,6 +301,8 @@ test("生成した無料同期スクリプトは全難易度を収集し、異�
       { title: "Fixture Song", achievements: 100, chartType: "standard" }
     ]);
     assert.equal(sentPayloads[0].scores[0].dxScore, 2222);
+    assert.equal(sentPayloads[0].scores[0].comboStatus, "AP+");
+    assert.equal(sentPayloads[0].scores[0].syncStatus, "FDX");
 
     mode = "invalid";
     requestedDifficulties.length = 0;
