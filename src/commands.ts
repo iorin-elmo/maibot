@@ -147,9 +147,19 @@ function candidateEmbeds(playerName: string, kind: "new" | "old", candidates: Be
 }
 
 async function replyCardImages(interaction: ChatInputCommandInteraction, playerName: string, title: string, cards: Parameters<typeof renderScoreCardImages>[2], filename: string): Promise<void> {
-  await interaction.deferReply();
+  if (!interaction.deferred && !interaction.replied) await interaction.deferReply();
   const images = await renderScoreCardImages(playerName, title, cards);
   await interaction.editReply({ files: images.map((image, index) => new AttachmentBuilder(image, { name: `${filename}-${index + 1}.jpg` })) });
+}
+
+async function enrichImageScores(catalog: MaimaiCatalog | undefined, scores: ScoreRecord[]): Promise<ScoreRecord[]> {
+  if (!catalog) return scores;
+  try {
+    return await catalog.enrich(scores);
+  } catch (error) {
+    console.warn("Could not resolve score jackets", error);
+    return scores;
+  }
 }
 
 export async function handleMaimai(interaction: ChatInputCommandInteraction, db: BotDatabase, importBaseUrl: string, catalog?: MaimaiCatalog): Promise<void> {
@@ -193,19 +203,10 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     return;
   }
 
-  const kind = interaction.options.getString("kind") ?? "all";
-  let allScores = db.getScores(interaction.user.id);
-  // Resolve jacket IDs at display time too, so existing users get covers
-  // immediately rather than having to re-run a score import.
-  if (catalog) {
-    try {
-      allScores = await catalog.enrich(allScores);
-    } catch (error) {
-      console.warn("Could not resolve score jackets", error);
-    }
-  }
-  const playerName = account.playerName ?? "maimai";
   const wantsImage = subcommand === "image" || interaction.options.getBoolean("image") === true;
+  const kind = interaction.options.getString("kind") ?? "all";
+  const allScores = db.getScores(interaction.user.id);
+  const playerName = account.playerName ?? "maimai";
   if (subcommand === "dxscore" || subcommand === "dxstar") {
     const level = interaction.options.getString("level", true).trim();
     const count = interaction.options.getInteger("count") ?? 10;
@@ -221,7 +222,9 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         return;
       }
       if (wantsImage) {
-        await replyCardImages(interaction, playerName, `Lv.${level} DXスコア%順`, dxScoreCards(scores), "maimai-dxscore");
+        await interaction.deferReply();
+        const imageScores = await enrichImageScores(catalog, scores);
+        await replyCardImages(interaction, playerName, `Lv.${level} DXスコア%順`, dxScoreCards(imageScores), "maimai-dxscore");
         return;
       }
       const descriptions = splitLines(scores.map(renderDxScore), 3_900).map(asCodeBlock);
@@ -239,7 +242,10 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       return;
     }
     if (wantsImage) {
-      await replyCardImages(interaction, playerName, `Lv.${level} ☆${targetStars}候補曲`, dxStarCandidateCards(candidates), "maimai-dxstar");
+      await interaction.deferReply();
+      const imageScores = await enrichImageScores(catalog, candidates.map((candidate) => candidate.score));
+      const imageCandidates = candidates.map((candidate, index) => ({ ...candidate, score: imageScores[index] }));
+      await replyCardImages(interaction, playerName, `Lv.${level} ☆${targetStars}候補曲`, dxStarCandidateCards(imageCandidates), "maimai-dxstar");
       return;
     }
     const missingScoreWidth = String(Math.max(...candidates.map((candidate) => candidate.missingScore))).length;
@@ -261,12 +267,15 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       candidates: bestCandidates(allScores, candidateKind, count)
     }));
     if (wantsImage) {
-      const cards = candidateGroups.flatMap(({ candidates }) => candidateCards(candidates));
-      if (!cards.length) {
+      const candidates = candidateGroups.flatMap((group) => group.candidates);
+      if (!candidates.length) {
         await interaction.reply({ content: "上位ランク到達でレートが伸びる候補はありません。", ephemeral: true });
         return;
       }
-      await replyCardImages(interaction, playerName, "Best候補曲", cards, "maimai-candidate");
+      await interaction.deferReply();
+      const imageScores = await enrichImageScores(catalog, candidates.map((candidate) => candidate.score));
+      const imageCandidates = candidates.map((candidate, index) => ({ ...candidate, score: imageScores[index] }));
+      await replyCardImages(interaction, playerName, "Best候補曲", candidateCards(imageCandidates), "maimai-candidate");
       return;
     }
     const embeds = candidateGroups.flatMap(({ kind: candidateKind, candidates }) => {
@@ -302,7 +311,9 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   }
 
   if (wantsImage) {
-    await replyCardImages(interaction, playerName, label, bestCards(scores, mixed), "maimai-best");
+    await interaction.deferReply();
+    const imageScores = await enrichImageScores(catalog, scores);
+    await replyCardImages(interaction, playerName, label, bestCards(imageScores, mixed), "maimai-best");
     return;
   }
 

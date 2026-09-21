@@ -38,14 +38,14 @@ async function jacket(score: ScoreRecord): Promise<Awaited<ReturnType<typeof loa
   let pending = coverCache.get(url);
   if (!pending) {
     pending = (async () => {
-      try {
-        const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
-        if (!response.ok) return undefined;
-        return await loadImage(Buffer.from(await response.arrayBuffer()));
-      } catch {
-        return undefined;
-      }
-    })();
+      const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+      if (!response.ok) throw new Error(`Could not fetch jacket: ${response.status}`);
+      return loadImage(Buffer.from(await response.arrayBuffer()));
+    })().catch(() => {
+      // A temporary HTTP or decoding failure must be retried next time.
+      coverCache.delete(url);
+      return undefined;
+    });
     coverCache.set(url, pending);
   }
   return pending;
