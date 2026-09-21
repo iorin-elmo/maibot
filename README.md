@@ -9,6 +9,8 @@ maimai DX NETのスコアを同期し、DiscordでBest 50を表示するBotで�
 | `/maimai sync` | Standardコースの「でらっくすRating」ページから公式Best 50を同期 |
 | `/maimai fsync` | 無料コース向け。全難易度の楽曲スコアからBest 50を計算して同期 |
 | `/maimai newconstant [count]` | 新曲（最新2バージョン）のDX/STD譜面を譜面定数順に表示。未プレイ・Standardコース同期のBest枠外は `-%`、既定30件・最大50件 |
+| `/maimai plate <kind> [count]` | 指定プレートに不足する譜面を定数順に表示。`kind` は熊神・彩将・丸舞舞など、既定30件・最大50件 |
+| `/maimai level <level> <kind> [count]` | 指定レベルの未AP+/AP/SSS+/SSS/SS+/SS/S+/S/FC+/FC/FDXを達成率順に表示、既定30件・最大50件 |
 | `/maimai help` | 使い方を表示 |
 | `/maimai best [kind]` | 定数・単曲レート・達成率を含むベスト枠を表示 |
 | `/maimai mbest [kind]` | スマホ向けの短いベスト枠を表示 |

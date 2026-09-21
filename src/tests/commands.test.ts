@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { renderCandidate, renderDxScore, renderDxStarCandidate, renderNewConstantScore } from "../commands.js";
+import { maimaiCommand, renderCandidate, renderDxScore, renderDxStarCandidate, renderNewConstantScore, renderProgressScore } from "../commands.js";
 import { difficultyAccent, renderScoreCardImages } from "../best-image.js";
 
 test("候補表示は達成率とランクの桁数に関係なく列がそろう", () => {
@@ -56,4 +56,29 @@ test("new chart constant rows distinguish unplayed scores while keeping achievem
   assert.equal(played, "# 1 [14.5] 100.0000% / DX MASTER / Played");
   assert.equal(unplayed, "# 2 [14.4]        -% / STD MASTER / Unplayed");
   assert.equal(played.indexOf("%"), unplayed.indexOf("%"));
+});
+
+test("progress rows keep achievement and status columns aligned", () => {
+  const combo = renderProgressScore({ title: "Combo", difficulty: "MASTER", rating: 0, internalLevel: 14.4, achievements: 100.9999, comboStatus: "AP", syncStatus: "FDX" }, 0, "AP");
+  const missingCombo = renderProgressScore({ title: "Missing", difficulty: "MASTER", rating: 0, internalLevel: 14.3 }, 1, "FC");
+  const rank = renderProgressScore({ title: "Rank", difficulty: "MASTER", rating: 0, internalLevel: 14.4, achievements: 100.9999 }, 0, "SSS+");
+  const missingRank = renderProgressScore({ title: "Unplayed", difficulty: "MASTER", rating: 0, internalLevel: 14.3 }, 1, "SSS");
+  assert.equal(combo, "#01 [14.4] 100.9999% (AP ) (FDX) / Combo");
+  assert.equal(missingCombo, "#02 [14.3]        -% ( - ) ( - ) / Missing");
+  assert.equal(rank, "#01 [14.4] 100.9999% (SSS+) / Rank");
+  assert.equal(missingRank, "#02 [14.3]        -% ( -- ) / Unplayed");
+  assert.equal(combo.indexOf("%"), missingCombo.indexOf("%"));
+  assert.equal(rank.indexOf("%"), missingRank.indexOf("%"));
+});
+
+test("plate and level commands use their required inputs and 30-to-50 count range", () => {
+  const command = maimaiCommand.toJSON() as { options: Array<{ name: string; options?: Array<{ name: string; required?: boolean; min_value?: number; max_value?: number }> }> };
+  const plate = command.options.find((option) => option.name === "plate");
+  const level = command.options.find((option) => option.name === "level");
+  assert.equal(plate?.options?.find((option) => option.name === "kind")?.required, true);
+  const plateCount = plate?.options?.find((option) => option.name === "count");
+  assert.equal(plateCount?.min_value, 1);
+  assert.equal(plateCount?.max_value, 50);
+  assert.equal(level?.options?.find((option) => option.name === "level")?.required, true);
+  assert.equal(level?.options?.find((option) => option.name === "kind")?.required, true);
 });
