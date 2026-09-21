@@ -20,6 +20,18 @@ interface CardItem {
   accent?: string;
 }
 
+export function difficultyAccent(difficulty: string): string {
+  switch (difficulty.trim().toUpperCase()) {
+    case "BASIC": return "#48c95a";
+    case "ADVANCED": return "#f49a36";
+    case "EXPERT": return "#ed4c55";
+    case "MASTER": return "#9a62db";
+    case "REMASTER":
+    case "RE:MASTER": return "#ffffff";
+    default: return "#ef8eea";
+  }
+}
+
 async function jacket(score: ScoreRecord): Promise<Awaited<ReturnType<typeof loadImage>> | undefined> {
   if (!score.jacketImageName) return undefined;
   const url = `${COVER_BASE_URL}/${encodeURIComponent(score.jacketImageName)}.jpg`;
@@ -142,7 +154,7 @@ export function bestCards(scores: ScoreRecord[], mixed: boolean): CardItem[] {
     topLeft: `${mixed ? (score.chartKind === "new" ? "新" : "旧") : ""}Lv${score.internalLevel?.toFixed(1) ?? "?"}`,
     topRight: `#${score.officialRank ?? index + 1} ${score.internalLevel === undefined ? "?" : score.rating}`,
     bottom: score.achievements === undefined ? "-" : `${score.achievements.toFixed(4)}%`,
-    accent: score.chartKind === "new" ? "#ff85cf" : "#73b8ff"
+    accent: difficultyAccent(score.difficulty)
   }));
 }
 
@@ -152,7 +164,7 @@ export function candidateCards(candidates: BestCandidate[]): CardItem[] {
     topLeft: `#${index + 1} Lv${candidate.score.internalLevel?.toFixed(1) ?? "?"}`,
     topRight: `+${candidate.ratingGain}`,
     bottom: `${candidate.score.achievements?.toFixed(4) ?? "-"}% → ${candidate.nextRank}`,
-    accent: "#ffbe66"
+    accent: difficultyAccent(candidate.score.difficulty)
   }));
 }
 
@@ -162,7 +174,7 @@ export function dxScoreCards(scores: ScoreRecord[]): CardItem[] {
     topLeft: `#${index + 1} Lv${score.level ?? "?"}`,
     topRight: `☆${dxStar(score) ?? 0}`,
     bottom: `${score.dxScore ?? 0}/${score.dxScoreMax ?? 0} (${(dxScorePercent(score) ?? 0).toFixed(3)}%)`,
-    accent: "#55d7e9"
+    accent: difficultyAccent(score.difficulty)
   }));
 }
 
@@ -172,7 +184,7 @@ export function dxStarCandidateCards(candidates: DxStarCandidate[]): CardItem[] 
     topLeft: `#${index + 1} Lv${candidate.score.level ?? "?"}`,
     topRight: `☆${candidate.targetStars} -${candidate.missingScore}`,
     bottom: `${candidate.score.dxScore ?? 0}/${candidate.score.dxScoreMax ?? 0} (${(dxScorePercent(candidate.score) ?? 0).toFixed(3)}%)`,
-    accent: "#8fe871"
+    accent: difficultyAccent(candidate.score.difficulty)
   }));
 }
 
