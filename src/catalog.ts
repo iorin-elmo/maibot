@@ -75,6 +75,10 @@ export class MaimaiCatalog {
     return [normalize(title), difficulty.toLowerCase(), normalize(level ?? "")].join("\u0000");
   }
 
+  private legacyTitleDifficultyKey(title: string, difficulty: string): string {
+    return [normalize(title), difficulty.toLowerCase()].join("\u0000");
+  }
+
   private async load(needsVersionMetadata: boolean): Promise<LoadedCatalog> {
     const cachedIndex = this.cachedIndex;
     const cachedCharts = this.cachedCharts;
@@ -179,21 +183,32 @@ export class MaimaiCatalog {
       : []));
     const newCharts = charts.filter((chart) => chart.version !== undefined && newestVersions.has(chart.version));
     const legacyScores = new Map<string, ScoreRecord | null>();
+    const levelLessLegacyScores = new Map<string, ScoreRecord | null>();
     for (const score of scores) {
       if (score.chartType) continue;
-      const key = this.legacyKey(score.title, score.difficulty, score.level);
-      legacyScores.set(key, legacyScores.has(key) ? null : score);
+      if (normalize(score.level ?? "")) {
+        const key = this.legacyKey(score.title, score.difficulty, score.level);
+        legacyScores.set(key, legacyScores.has(key) ? null : score);
+      } else {
+        const key = this.legacyTitleDifficultyKey(score.title, score.difficulty);
+        levelLessLegacyScores.set(key, levelLessLegacyScores.has(key) ? null : score);
+      }
     }
     const chartCountByLegacyKey = new Map<string, number>();
+    const chartCountByLegacyTitleDifficultyKey = new Map<string, number>();
     for (const chart of newCharts) {
       const key = this.legacyKey(chart.title, chart.difficulty, chart.level);
       chartCountByLegacyKey.set(key, (chartCountByLegacyKey.get(key) ?? 0) + 1);
+      const titleDifficultyKey = this.legacyTitleDifficultyKey(chart.title, chart.difficulty);
+      chartCountByLegacyTitleDifficultyKey.set(titleDifficultyKey, (chartCountByLegacyTitleDifficultyKey.get(titleDifficultyKey) ?? 0) + 1);
     }
     return newCharts
       .map((chart) => {
         const legacyKey = this.legacyKey(chart.title, chart.difficulty, chart.level);
+        const titleDifficultyKey = this.legacyTitleDifficultyKey(chart.title, chart.difficulty);
         const score = scoresByChart.get(chart.key)
-          ?? (chartCountByLegacyKey.get(legacyKey) === 1 ? legacyScores.get(legacyKey) ?? undefined : undefined);
+          ?? (chartCountByLegacyKey.get(legacyKey) === 1 ? legacyScores.get(legacyKey) ?? undefined : undefined)
+          ?? (chartCountByLegacyTitleDifficultyKey.get(titleDifficultyKey) === 1 ? levelLessLegacyScores.get(titleDifficultyKey) ?? undefined : undefined);
         return {
           title: chart.title,
           difficulty: chart.difficulty,
