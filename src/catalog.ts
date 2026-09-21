@@ -178,13 +178,19 @@ export class MaimaiCatalog {
   async newestChartConstantRanking(scores: ScoreRecord[]): Promise<ScoreRecord[]> {
     const { charts, newestVersions } = await this.load(true);
     if (newestVersions.size !== 2) throw new Error("新曲のバージョン情報を照合できませんでした。");
-    const scoresByChart = new Map(scores.flatMap((score) => score.chartType
+    const scoresByChart = new Map(scores.flatMap((score) => score.chartType && normalize(score.level ?? "")
       ? [[this.key(score.title, score.chartType, score.difficulty, score.level), score] as const]
       : []));
     const newCharts = charts.filter((chart) => chart.version !== undefined && newestVersions.has(chart.version));
+    const levelLessTypedScores = new Map<string, ScoreRecord | null>();
     const legacyScores = new Map<string, ScoreRecord | null>();
     const levelLessLegacyScores = new Map<string, ScoreRecord | null>();
     for (const score of scores) {
+      if (score.chartType && !normalize(score.level ?? "")) {
+        const key = this.key(score.title, score.chartType, score.difficulty, undefined);
+        levelLessTypedScores.set(key, levelLessTypedScores.has(key) ? null : score);
+        continue;
+      }
       if (score.chartType) continue;
       if (normalize(score.level ?? "")) {
         const key = this.legacyKey(score.title, score.difficulty, score.level);
@@ -194,9 +200,12 @@ export class MaimaiCatalog {
         levelLessLegacyScores.set(key, levelLessLegacyScores.has(key) ? null : score);
       }
     }
+    const chartCountByLevelLessTypedKey = new Map<string, number>();
     const chartCountByLegacyKey = new Map<string, number>();
     const chartCountByLegacyTitleDifficultyKey = new Map<string, number>();
     for (const chart of newCharts) {
+      const levelLessTypedKey = this.key(chart.title, chart.chartType, chart.difficulty, undefined);
+      chartCountByLevelLessTypedKey.set(levelLessTypedKey, (chartCountByLevelLessTypedKey.get(levelLessTypedKey) ?? 0) + 1);
       const key = this.legacyKey(chart.title, chart.difficulty, chart.level);
       chartCountByLegacyKey.set(key, (chartCountByLegacyKey.get(key) ?? 0) + 1);
       const titleDifficultyKey = this.legacyTitleDifficultyKey(chart.title, chart.difficulty);
@@ -204,9 +213,11 @@ export class MaimaiCatalog {
     }
     return newCharts
       .map((chart) => {
+        const levelLessTypedKey = this.key(chart.title, chart.chartType, chart.difficulty, undefined);
         const legacyKey = this.legacyKey(chart.title, chart.difficulty, chart.level);
         const titleDifficultyKey = this.legacyTitleDifficultyKey(chart.title, chart.difficulty);
         const score = scoresByChart.get(chart.key)
+          ?? (chartCountByLevelLessTypedKey.get(levelLessTypedKey) === 1 ? levelLessTypedScores.get(levelLessTypedKey) ?? undefined : undefined)
           ?? (chartCountByLegacyKey.get(legacyKey) === 1 ? legacyScores.get(legacyKey) ?? undefined : undefined)
           ?? (chartCountByLegacyTitleDifficultyKey.get(titleDifficultyKey) === 1 ? levelLessLegacyScores.get(titleDifficultyKey) ?? undefined : undefined);
         return {

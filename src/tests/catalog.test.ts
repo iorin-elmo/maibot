@@ -53,6 +53,11 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
     assert.deepEqual(newChartRanking.map((score) => score.achievements), [98, undefined]);
     assert.deepEqual(newChartRanking.map((score) => score.internalLevel), [14.2, 14.1]);
 
+    const typedLevelLessRanking = await catalog.newestChartConstantRanking([{
+      title: "New", difficulty: "MASTER", achievements: 97, rating: 0, chartKind: "new", chartType: "dx"
+    }]);
+    assert.deepEqual(typedLevelLessRanking.map((score) => score.achievements), [97, undefined]);
+
     document = {
       versions: [{ version: "old" }, { version: "new-1" }, { version: "new-2" }],
       songs: [{ title: "Ambiguous", version: "new-2", sheets: [
