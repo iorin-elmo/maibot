@@ -149,7 +149,7 @@ function candidateEmbeds(playerName: string, kind: "new" | "old", candidates: Be
 async function replyCardImages(interaction: ChatInputCommandInteraction, playerName: string, title: string, cards: Parameters<typeof renderScoreCardImages>[2], filename: string): Promise<void> {
   await interaction.deferReply();
   const images = await renderScoreCardImages(playerName, title, cards);
-  await interaction.editReply({ files: images.map((image, index) => new AttachmentBuilder(image, { name: `${filename}-${index + 1}.png` })) });
+  await interaction.editReply({ files: images.map((image, index) => new AttachmentBuilder(image, { name: `${filename}-${index + 1}.jpg` })) });
 }
 
 export async function handleMaimai(interaction: ChatInputCommandInteraction, db: BotDatabase, importBaseUrl: string, catalog?: MaimaiCatalog): Promise<void> {

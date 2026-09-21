@@ -101,7 +101,10 @@ function drawCard(context: SKRSContext2D, item: CardItem, image: Awaited<ReturnT
 }
 
 export async function renderScoreCardImages(playerName: string, title: string, items: CardItem[]): Promise<Buffer[]> {
-  const perImage = 10;
+  // Best 50 is intentionally a single 5 × 10 sheet, matching the in-game
+  // rating-card layout. JPEG keeps the finished sheet below Discord's upload
+  // limit even when every jacket is present.
+  const perImage = Math.max(1, items.length);
   const images: Buffer[] = [];
   for (let start = 0; start < items.length; start += perImage) {
     const page = items.slice(start, start + perImage);
@@ -128,7 +131,7 @@ export async function renderScoreCardImages(playerName: string, title: string, i
       const row = Math.floor(index / columns);
       drawCard(context, item, jackets[index], gutter + column * (cardWidth + gutter), headerHeight + gutter + row * (cardHeight + gutter), cardWidth, cardHeight);
     });
-    images.push(canvas.toBuffer("image/png"));
+    images.push(canvas.toBuffer("image/jpeg", 92));
   }
   return images;
 }
@@ -176,5 +179,5 @@ export function dxStarCandidateCards(candidates: DxStarCandidate[]): CardItem[] 
 // Kept for the existing /maimai image command. Its output now uses jacket cards.
 export async function renderBestImage(playerName: string, label: string, _summary: string, scores: ScoreRecord[], mixed: boolean): Promise<Buffer> {
   const images = await renderScoreCardImages(playerName, label, bestCards(scores, mixed));
-  return images[0] ?? createCanvas(1, 1).toBuffer("image/png");
+  return images[0] ?? createCanvas(1, 1).toBuffer("image/jpeg", 92);
 }

@@ -30,13 +30,14 @@ test("DX score rows use the requested percent, score fraction, and star formats"
   assert.equal(renderDxStarCandidate({ score, currentStars: 4, targetStars: 5, missingScore: 1 }, 0, 2), "# 1  969/1000 (96.900%) ☆5  -1 / DX Song");
 });
 
-test("score cards render even when a jacket is unavailable", async () => {
-  const images = await renderScoreCardImages("Tester", "DXスコア%順", [{
-    score: { title: "No Jacket", difficulty: "MASTER", rating: 0 },
-    topLeft: "#1 Lv14",
+test("score cards render 50 songs as a single sheet even when jackets are unavailable", async () => {
+  const cards = Array.from({ length: 50 }, (_, index) => ({
+    score: { title: `No Jacket ${index + 1}`, difficulty: "MASTER", rating: 0 },
+    topLeft: `#${index + 1} Lv14`,
     topRight: "☆5",
     bottom: "1000/1000 (100.000%)"
-  }]);
+  }));
+  const images = await renderScoreCardImages("Tester", "DXスコア%順", cards);
   assert.equal(images.length, 1);
-  assert.ok(images[0].length > 1_000);
+  assert.ok(images[0].length > 10_000);
 });
