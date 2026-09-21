@@ -32,7 +32,7 @@ const levelProgressKindOption = (option: SlashCommandStringOption) =>
   );
 
 const plateVersionOption = (option: SlashCommandStringOption) =>
-  option.setName("version").setDescription("プレートのバージョン（例: 桃、熊、彩）").setRequired(true).setAutocomplete(true);
+  option.setName("version").setDescription("プレートのバージョンを入力して候補を絞り込み（例: 桃、熊、彩）").setRequired(true).setAutocomplete(true);
 
 const plateKindOption = (option: SlashCommandStringOption) =>
   option.setName("kind").setDescription("プレートの目標").setRequired(true).addChoices(
@@ -307,7 +307,12 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     }
     const count = interaction.options.getInteger("count") ?? 30;
     await interaction.deferReply();
-    const scores = (await catalog.plateProgressRanking(plate.versions, allScores, plate.standardOnly, plate.excludedTitles))
+    const plateScores = await catalog.plateProgressRanking(plate.versions, allScores, plate.standardOnly, plate.excludedTitles);
+    if (!plateScores.length) {
+      await interaction.editReply(`${plate.name} の対象譜面データを取得できません。カタログを更新してからお試しください。`);
+      return;
+    }
+    const scores = plateScores
       .filter((score) => !progressKindSatisfied(score, plate.goal))
       .sort((a, b) => (b.internalLevel ?? 0) - (a.internalLevel ?? 0)
         || (b.achievements ?? -Infinity) - (a.achievements ?? -Infinity)
