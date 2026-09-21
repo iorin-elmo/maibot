@@ -10,7 +10,7 @@ interface CatalogSheet {
   /** The version in which this particular chart was added. */
   version?: string;
 }
-interface CatalogSong { title: string; version?: string; sheets: CatalogSheet[]; }
+interface CatalogSong { title: string; imageName?: string; version?: string; sheets: CatalogSheet[]; }
 interface CatalogDocument {
   versions?: Array<{ version: string }>;
   songs: CatalogSong[];
@@ -19,6 +19,7 @@ interface CatalogDocument {
 interface CatalogEntry {
   internalLevel: number;
   dxScoreMax?: number;
+  jacketImageName?: string;
   version?: string;
 }
 interface LoadedCatalog {
@@ -79,6 +80,7 @@ export class MaimaiCatalog {
         index.set(this.key(song.title, type, sheet.difficulty, sheet.level), {
           internalLevel: sheet.internalLevelValue,
           dxScoreMax: maximumDxScore(sheet.noteCounts),
+          jacketImageName: typeof song.imageName === "string" && song.imageName ? song.imageName : undefined,
           version: versionId(sheet.version) ?? versionId(song.version)
         });
       }
@@ -114,7 +116,11 @@ export class MaimaiCatalog {
         throw new Error(`譜面定数またはバージョンを照合できませんでした: ${score.title}`);
       }
       if (!entry) return score;
-      const enriched = entry.dxScoreMax === undefined ? score : { ...score, dxScoreMax: entry.dxScoreMax };
+      const enriched = {
+        ...score,
+        ...(entry.dxScoreMax === undefined ? {} : { dxScoreMax: entry.dxScoreMax }),
+        ...(entry.jacketImageName === undefined ? {} : { jacketImageName: entry.jacketImageName })
+      };
       if (score.achievements === undefined) return enriched;
       return {
         ...enriched,

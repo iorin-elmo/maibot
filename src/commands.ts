@@ -3,7 +3,8 @@ import {
 } from "discord.js";
 import { achievementRank, bestCandidates, bestScores, dxScorePercent, dxStar, dxStarCandidates, type BestCandidate, type DxStarCandidate } from "./analysis.js";
 import { makeFreeBookmarklet, makePremiumBookmarkletSecure } from "./browser-sync.js";
-import { renderBestImage } from "./best-image.js";
+import { bestCards, candidateCards, dxScoreCards, dxStarCandidateCards, renderScoreCardImages } from "./best-image.js";
+import type { MaimaiCatalog } from "./catalog.js";
 import type { BotDatabase } from "./database.js";
 import { padDisplayEnd, truncateSongTitle } from "./text.js";
 import type { ScoreRecord } from "./types.js";
@@ -24,6 +25,9 @@ const levelOption = (option: SlashCommandStringOption) =>
 const starOption = (option: SlashCommandIntegerOption) =>
   option.setName("star").setDescription("目標のDXスコア星").setRequired(true).setMinValue(1).setMaxValue(6);
 
+const imageOption = (option: import("discord.js").SlashCommandBooleanOption) =>
+  option.setName("image").setDescription("ジャケット付きの画像で出力します");
+
 export const maimaiCommand = new SlashCommandBuilder()
   .setName("maimai")
   .setDescription("maimaiのベスト枠を表示します")
@@ -31,21 +35,25 @@ export const maimaiCommand = new SlashCommandBuilder()
   .addSubcommand((command) => command.setName("sync").setDescription("StandardコースのRatingページから同期します"))
   .addSubcommand((command) => command.setName("fsync").setDescription("無料コースのversion別スコアから同期します"))
   .addSubcommand((command) => command.setName("best").setDescription("ベスト枠を表示します")
-    .addStringOption(kindOption))
+    .addStringOption(kindOption)
+    .addBooleanOption(imageOption))
   .addSubcommand((command) => command.setName("mbest").setDescription("スマホ向けの短いベスト枠表示")
     .addStringOption(kindOption))
   .addSubcommand((command) => command.setName("image").setDescription("ベスト枠を画像で表示します")
     .addStringOption(kindOption))
   .addSubcommand((command) => command.setName("candidate").setDescription("次ランク到達でBestレートが伸びる候補譜面を表示")
     .addStringOption(kindOption)
-    .addIntegerOption(countOption))
+    .addIntegerOption(countOption)
+    .addBooleanOption(imageOption))
   .addSubcommand((command) => command.setName("dxscore").setDescription("指定レベルのDXスコア%順を表示")
     .addStringOption(levelOption)
-    .addIntegerOption(countOption))
+    .addIntegerOption(countOption)
+    .addBooleanOption(imageOption))
   .addSubcommand((command) => command.setName("dxstar").setDescription("指定したDXスコア星まであと少しの譜面を表示")
     .addStringOption(levelOption)
     .addIntegerOption(starOption)
-    .addIntegerOption(countOption));
+    .addIntegerOption(countOption)
+    .addBooleanOption(imageOption));
 
 function renderMarkdownScore(score: ScoreRecord, index: number, mixed: boolean): string {
   const rank = String(score.officialRank ?? index + 1).padStart(2, "0");
@@ -138,7 +146,13 @@ function candidateEmbeds(playerName: string, kind: "new" | "old", candidates: Be
     .setDescription(`${index ? "" : `${syncNote}必要達成率差が小さい順です。「(+値)」は、Bestレートが伸びる最初の上位ランクまで上げた場合の増分です。\n\n`}${asCodeBlock(description)}`));
 }
 
-export async function handleMaimai(interaction: ChatInputCommandInteraction, db: BotDatabase, importBaseUrl: string): Promise<void> {
+async function replyCardImages(interaction: ChatInputCommandInteraction, playerName: string, title: string, cards: Parameters<typeof renderScoreCardImages>[2], filename: string): Promise<void> {
+  await interaction.deferReply();
+  const images = await renderScoreCardImages(playerName, title, cards);
+  await interaction.editReply({ files: images.map((image, index) => new AttachmentBuilder(image, { name: `${filename}-${index + 1}.png` })) });
+}
+
+export async function handleMaimai(interaction: ChatInputCommandInteraction, db: BotDatabase, importBaseUrl: string, catalog?: MaimaiCatalog): Promise<void> {
   const subcommand = interaction.options.getSubcommand();
   if (subcommand === "help") {
     const embed = new EmbedBuilder()
@@ -148,12 +162,12 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       .addFields(
         { name: "/maimai sync", value: "Standardコースの「でらっくすRating」ページから同期" },
         { name: "/maimai fsync", value: "無料コース向け。version別スコアからBest 50を計算して同期" },
-        { name: "/maimai best [kind]", value: "PC向けの詳しいベスト枠表示" },
+        { name: "/maimai best [kind] [image]", value: "PC向けの詳しいベスト枠表示。image を有効にするとジャケット付きカード画像" },
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
         { name: "/maimai image [kind]", value: "ベスト枠を画像で表示" },
-        { name: "/maimai candidate [kind] [count]", value: "次ランク到達でBestレートが伸びる候補。枠外候補の算出には /maimai fsync が必要（既定10件、最大30件）" },
-        { name: "/maimai dxscore <level> [count]", value: "指定レベルのDXスコア%順。現在DXスコア / 譜面ごとの最大DXスコアを表示" },
-        { name: "/maimai dxstar <level> <star> [count]", value: "指定レベルで、次の指定星まであと何DXスコアかが少ない順。star は1〜6" },
+        { name: "/maimai candidate [kind] [count] [image]", value: "次ランク到達でBestレートが伸びる候補。枠外候補の算出には /maimai fsync が必要（既定10件、最大30件）" },
+        { name: "/maimai dxscore <level> [count] [image]", value: "指定レベルのDXスコア%順。現在DXスコア / 譜面ごとの最大DXスコアを表示" },
+        { name: "/maimai dxstar <level> <star> [count] [image]", value: "指定レベルで、次の指定星まであと何DXスコアかが少ない順。star は1〜6" },
         { name: "kind", value: "新曲 / 旧曲 / 全曲。省略時は全曲。" }
       );
     await interaction.reply({ embeds: [embed], ephemeral: true });
@@ -180,8 +194,18 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   }
 
   const kind = interaction.options.getString("kind") ?? "all";
-  const allScores = db.getScores(interaction.user.id);
+  let allScores = db.getScores(interaction.user.id);
+  // Resolve jacket IDs at display time too, so existing users get covers
+  // immediately rather than having to re-run a score import.
+  if (catalog) {
+    try {
+      allScores = await catalog.enrich(allScores);
+    } catch (error) {
+      console.warn("Could not resolve score jackets", error);
+    }
+  }
   const playerName = account.playerName ?? "maimai";
+  const wantsImage = subcommand === "image" || interaction.options.getBoolean("image") === true;
   if (subcommand === "dxscore" || subcommand === "dxstar") {
     const level = interaction.options.getString("level", true).trim();
     const count = interaction.options.getInteger("count") ?? 10;
@@ -194,6 +218,10 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         .slice(0, count);
       if (!scores.length) {
         await interaction.reply({ content: `Lv.${level} のDXスコアを表示できる譜面がありません。 \`/maimai fsync\` を再実行してからお試しください。`, ephemeral: true });
+        return;
+      }
+      if (wantsImage) {
+        await replyCardImages(interaction, playerName, `Lv.${level} DXスコア%順`, dxScoreCards(scores), "maimai-dxscore");
         return;
       }
       const descriptions = splitLines(scores.map(renderDxScore), 3_900).map(asCodeBlock);
@@ -210,6 +238,10 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       await interaction.reply({ content: `Lv.${level} に ☆${targetStars} 未満のDXスコア候補がありません。 \`/maimai fsync\` を再実行してからお試しください。`, ephemeral: true });
       return;
     }
+    if (wantsImage) {
+      await replyCardImages(interaction, playerName, `Lv.${level} ☆${targetStars}候補曲`, dxStarCandidateCards(candidates), "maimai-dxstar");
+      return;
+    }
     const missingScoreWidth = String(Math.max(...candidates.map((candidate) => candidate.missingScore))).length;
     const descriptions = splitLines(candidates.map((candidate, index) => renderDxStarCandidate(candidate, index, missingScoreWidth)), 3_900).map(asCodeBlock);
     await interaction.reply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
@@ -224,9 +256,22 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     const count = interaction.options.getInteger("count") ?? 10;
     const requestedKinds: Array<"new" | "old"> = kind === "new" ? ["new"] : kind === "old" ? ["old"] : ["new", "old"];
     const frameSizes = { new: 15, old: 35 } as const;
-    const embeds = requestedKinds.flatMap((candidateKind) => {
+    const candidateGroups = requestedKinds.map((candidateKind) => ({
+      kind: candidateKind,
+      candidates: bestCandidates(allScores, candidateKind, count)
+    }));
+    if (wantsImage) {
+      const cards = candidateGroups.flatMap(({ candidates }) => candidateCards(candidates));
+      if (!cards.length) {
+        await interaction.reply({ content: "上位ランク到達でレートが伸びる候補はありません。", ephemeral: true });
+        return;
+      }
+      await replyCardImages(interaction, playerName, "Best候補曲", cards, "maimai-candidate");
+      return;
+    }
+    const embeds = candidateGroups.flatMap(({ kind: candidateKind, candidates }) => {
       const hasOutsideCharts = allScores.filter((score) => score.chartKind === candidateKind).length > frameSizes[candidateKind];
-      return candidateEmbeds(playerName, candidateKind, bestCandidates(allScores, candidateKind, count), hasOutsideCharts);
+      return candidateEmbeds(playerName, candidateKind, candidates, hasOutsideCharts);
     });
     await interaction.reply({ embeds });
     return;
@@ -256,9 +301,8 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     return;
   }
 
-  if (subcommand === "image") {
-    const image = renderBestImage(playerName, label, summary, scores, mixed);
-    await interaction.reply({ files: [new AttachmentBuilder(image, { name: "maimai-best.png" })] });
+  if (wantsImage) {
+    await replyCardImages(interaction, playerName, label, bestCards(scores, mixed), "maimai-best");
     return;
   }
 

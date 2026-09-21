@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderCandidate, renderDxScore, renderDxStarCandidate } from "../commands.js";
+import { renderScoreCardImages } from "../best-image.js";
 
 test("候補表示は達成率とランクの桁数に関係なく列がそろう", () => {
   const under100 = renderCandidate({
@@ -27,4 +28,15 @@ test("DX score rows use the requested percent, score fraction, and star formats"
   assert.equal(renderDxScore(fourDigitAligned, 1), "# 2  969/2229 (43.472%) ☆0 / Low DX Song");
   assert.equal(renderDxStarCandidate({ score, currentStars: 4, targetStars: 5, missingScore: 1 }, 0), "# 1  969/1000 (96.900%) ☆5 -1 / DX Song");
   assert.equal(renderDxStarCandidate({ score, currentStars: 4, targetStars: 5, missingScore: 1 }, 0, 2), "# 1  969/1000 (96.900%) ☆5  -1 / DX Song");
+});
+
+test("score cards render even when a jacket is unavailable", async () => {
+  const images = await renderScoreCardImages("Tester", "DXスコア%順", [{
+    score: { title: "No Jacket", difficulty: "MASTER", rating: 0 },
+    topLeft: "#1 Lv14",
+    topRight: "☆5",
+    bottom: "1000/1000 (100.000%)"
+  }]);
+  assert.equal(images.length, 1);
+  assert.ok(images[0].length > 1_000);
 });
