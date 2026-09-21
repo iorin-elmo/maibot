@@ -3,6 +3,16 @@ import type { ScoreRecord } from "./types.js";
 export const levelProgressKinds = ["AP+", "AP", "SSS+", "SSS", "SS+", "SS", "S+", "S", "FC+", "FC", "FDX"] as const;
 export type LevelProgressKind = typeof levelProgressKinds[number];
 export type PlateGoal = "AP" | "FC" | "SSS" | "FDX";
+export const plateKinds = ["神", "極", "将", "舞舞"] as const;
+export type PlateKind = typeof plateKinds[number];
+
+export interface PlateVersion {
+  name: string;
+  label: string;
+  versions: string[];
+  standardOnly?: boolean;
+  excludedTitles: string[];
+}
 
 export interface PlateDefinition {
   name: string;
@@ -47,19 +57,28 @@ const suffixes: Array<[string, PlateGoal]> = [["極", "FC"], ["将", "SSS"], ["�
 /** Plate names and requirements from Gamerch's 制覇系 table. */
 const excludedFromAllPlates = ["前前前世"];
 
-export const plates: PlateDefinition[] = [
-  ...versionGroups.flatMap(([prefix, label, versions]) => suffixes.map(([suffix, goal]) => ({
-    name: `${prefix}${suffix}`, label, versions: [...versions], goal,
-    excludedTitles: prefix === "真" ? [...excludedFromAllPlates, "ジングルベル［H.］"] : [...excludedFromAllPlates]
-  }))),
-  ...suffixes.map(([suffix, goal]) => ({
-    name: `舞${suffix}`, label: "FiNALEまでのスタンダード譜面", versions: versionGroups.slice(0, 12).flatMap(([, , versions]) => versions as unknown as string[]), goal,
+export const plateVersions: PlateVersion[] = [
+  ...versionGroups.map(([name, label, versions]) => ({
+    name, label, versions: [...versions],
+    excludedTitles: name === "真" ? [...excludedFromAllPlates, "ジングルベル［H.］"] : [...excludedFromAllPlates]
+  })),
+  {
+    name: "舞", label: "FiNALEまでのスタンダード譜面", versions: versionGroups.slice(0, 12).flatMap(([, , versions]) => versions as unknown as string[]),
     standardOnly: true, excludedTitles: [...excludedFromAllPlates]
-  }))
+  }
 ];
+
+export const plates: PlateDefinition[] = plateVersions.flatMap((version) => suffixes.map(([suffix, goal]) => ({
+  name: `${version.name}${suffix}`, label: version.label, versions: version.versions, goal,
+  ...(version.standardOnly ? { standardOnly: true } : {}), excludedTitles: version.excludedTitles
+})));
 
 export function plateByName(name: string): PlateDefinition | undefined {
   return plates.find((plate) => plate.name === name.trim());
+}
+
+export function plateByVersionAndKind(version: string, kind: PlateKind): PlateDefinition | undefined {
+  return plateByName(`${version.trim()}${kind}`);
 }
 
 export function progressKindSatisfied(score: ScoreRecord, kind: LevelProgressKind | PlateGoal): boolean {

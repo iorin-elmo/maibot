@@ -6,7 +6,7 @@ import { makeFreeBookmarklet, makePremiumBookmarkletSecure } from "./browser-syn
 import { bestCards, candidateCards, dxScoreCards, dxStarCandidateCards, newConstantCards, progressCards, renderScoreCardImages } from "./best-image.js";
 import type { MaimaiCatalog } from "./catalog.js";
 import type { BotDatabase } from "./database.js";
-import { isComboOrSyncKind, levelProgressKinds, plateByName, plateGoalDescription, progressKindSatisfied, type LevelProgressKind } from "./progress.js";
+import { isComboOrSyncKind, levelProgressKinds, plateByVersionAndKind, plateGoalDescription, plateVersions, progressKindSatisfied, type LevelProgressKind, type PlateKind } from "./progress.js";
 import { padDisplayEnd, truncateSongTitle } from "./text.js";
 import type { ScoreRecord } from "./types.js";
 
@@ -31,8 +31,16 @@ const levelProgressKindOption = (option: SlashCommandStringOption) =>
     ...levelProgressKinds.map((kind) => ({ name: kind, value: kind }))
   );
 
+const plateVersionOption = (option: SlashCommandStringOption) =>
+  option.setName("version").setDescription("プレートのバージョン（例: 桃、熊、彩）").setRequired(true).setAutocomplete(true);
+
 const plateKindOption = (option: SlashCommandStringOption) =>
-  option.setName("kind").setDescription("プレート名（例: 熊神、彩将、丸舞舞）").setRequired(true);
+  option.setName("kind").setDescription("プレートの目標").setRequired(true).addChoices(
+    { name: "神（ALL PERFECT）", value: "神" },
+    { name: "極（FULL COMBO）", value: "極" },
+    { name: "将（RANK SSS）", value: "将" },
+    { name: "舞舞（FULL SYNC DX）", value: "舞舞" }
+  );
 
 const starOption = (option: SlashCommandIntegerOption) =>
   option.setName("star").setDescription("目標のDXスコア星").setRequired(true).setMinValue(1).setMaxValue(6);
@@ -50,6 +58,7 @@ export const maimaiCommand = new SlashCommandBuilder()
     .addIntegerOption(newConstantCountOption)
     .addBooleanOption(imageOption))
   .addSubcommand((command) => command.setName("plate").setDescription("プレート取得に足りない譜面を表示")
+    .addStringOption(plateVersionOption)
     .addStringOption(plateKindOption)
     .addIntegerOption(newConstantCountOption)
     .addBooleanOption(imageOption))
@@ -78,6 +87,18 @@ export const maimaiCommand = new SlashCommandBuilder()
     .addIntegerOption(starOption)
     .addIntegerOption(countOption)
     .addBooleanOption(imageOption));
+
+export async function handleMaimaiAutocomplete(interaction: import("discord.js").AutocompleteInteraction): Promise<void> {
+  if (interaction.commandName !== "maimai" || interaction.options.getSubcommand() !== "plate") return;
+  const focused = interaction.options.getFocused(true);
+  if (focused.name !== "version") return;
+  const query = String(focused.value).trim();
+  const matches = plateVersions
+    .filter((version) => !query || version.name.startsWith(query) || version.name.includes(query) || version.label.includes(query))
+    .slice(0, 25)
+    .map((version) => ({ name: `${version.name} — ${version.label}`, value: version.name }));
+  await interaction.respond(matches);
+}
 
 function renderMarkdownScore(score: ScoreRecord, index: number, mixed: boolean): string {
   const rank = String(score.officialRank ?? index + 1).padStart(2, "0");
@@ -217,7 +238,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         { name: "/maimai sync", value: "Standardコースの「でらっくすRating」ページから同期" },
         { name: "/maimai fsync", value: "無料コース向け。version別スコアからBest 50を計算して同期" },
         { name: "/maimai newconstant [count] [image]", value: "新曲（最新2バージョン）のDX/STD譜面を定数が高い順に表示。image でジャケット画像、既定30件・最大50件" },
-        { name: "/maimai plate <kind> [count] [image]", value: "指定プレートに不足している譜面を定数が高い順に表示。kind は 熊神・彩将・丸舞舞など。image でジャケット画像" },
+        { name: "/maimai plate <version> <kind> [count] [image]", value: "指定プレートに不足している譜面を定数が高い順に表示。version は 熊・彩など、kind は 神・極・将・舞舞。image でジャケット画像" },
         { name: "/maimai level <level> <kind> [count] [image]", value: "指定レベルの未AP+/AP/SSS+/SSS/SS+/SS/S+/S/FC+/FC/FDXを達成率順に表示。image でジャケット画像" },
         { name: "/maimai best [kind] [image]", value: "PC向けの詳しいベスト枠表示。image を有効にするとジャケット付きカード画像" },
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
@@ -277,10 +298,11 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   }
   if (subcommand === "plate") {
     if (!catalog) throw new Error("譜面定数データを利用できません。");
-    const plateName = interaction.options.getString("kind", true);
-    const plate = plateByName(plateName);
+    const version = interaction.options.getString("version", true);
+    const kind = interaction.options.getString("kind", true) as PlateKind;
+    const plate = plateByVersionAndKind(version, kind);
     if (!plate) {
-      await interaction.reply({ content: `プレート名「${plateName}」を確認できません。熊神・彩将・丸舞舞のように入力してください。`, ephemeral: true });
+      await interaction.reply({ content: `バージョン「${version}」を確認できません。候補から選択してください。`, ephemeral: true });
       return;
     }
     const count = interaction.options.getInteger("count") ?? 30;
@@ -314,7 +336,12 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     const kind = interaction.options.getString("kind", true) as LevelProgressKind;
     const count = interaction.options.getInteger("count") ?? 30;
     await interaction.deferReply();
-    const scores = (await catalog.levelProgressRanking(level, allScores))
+    const levelScores = await catalog.levelProgressRanking(level, allScores);
+    if (!levelScores.length) {
+      await interaction.editReply(`Lv.${level} の譜面が見つかりません。レベル表記を確認してください。`);
+      return;
+    }
+    const scores = levelScores
       .filter((score) => !progressKindSatisfied(score, kind))
       .sort((a, b) => (b.achievements ?? -Infinity) - (a.achievements ?? -Infinity)
         || (b.internalLevel ?? 0) - (a.internalLevel ?? 0)

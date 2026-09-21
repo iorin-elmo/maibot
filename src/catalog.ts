@@ -255,7 +255,7 @@ export class MaimaiCatalog {
     return this.scoreCharts(charts.filter((chart) => chart.version !== undefined
       && targetVersions.has(chart.version)
       && !excluded.has(chart.title)
-      && chart.difficulty.toLowerCase() !== "remaster"
+      && chart.difficulty.replace(/[:\s]/g, "").toLowerCase() !== "remaster"
       && (!standardOnly || chart.chartType === "standard")), scores);
   }
 }

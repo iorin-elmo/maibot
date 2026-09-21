@@ -73,14 +73,16 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
       versions: [{ version: "old" }, { version: "new-1" }, { version: "new-2" }],
       songs: [{ title: "Ambiguous", version: "new-2", sheets: [
         { type: "dx", difficulty: "MASTER", level: "14", internalLevelValue: 14 },
-        { type: "std", difficulty: "MASTER", level: "14", internalLevelValue: 14 }
+        { type: "std", difficulty: "MASTER", level: "14", internalLevelValue: 14 },
+        { type: "dx", difficulty: "RE:MASTER", level: "14", internalLevelValue: 14 }
       ] }]
     };
     const ambiguousCatalog = new MaimaiCatalog("https://example.invalid/dxdata.json");
     const ambiguousRanking = await ambiguousCatalog.newestChartConstantRanking([{
       title: "Ambiguous", difficulty: "MASTER", achievements: 98, rating: 0, chartKind: "new"
     }]);
-    assert.deepEqual(ambiguousRanking.map((score) => score.achievements), [undefined, undefined]);
+    assert.deepEqual(ambiguousRanking.map((score) => score.achievements), [undefined, undefined, undefined]);
+    assert.equal((await ambiguousCatalog.plateProgressRanking(["new-2"], [])).length, 2);
 
     document = {
       versions: [{ version: "old" }, { version: "new-1" }, { version: "new-2" }],

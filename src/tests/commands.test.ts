@@ -72,9 +72,11 @@ test("progress rows keep achievement and status columns aligned", () => {
 });
 
 test("plate and level commands use their required inputs and 30-to-50 count range", () => {
-  const command = maimaiCommand.toJSON() as { options: Array<{ name: string; options?: Array<{ name: string; required?: boolean; min_value?: number; max_value?: number }> }> };
+  const command = maimaiCommand.toJSON() as { options: Array<{ name: string; options?: Array<{ name: string; required?: boolean; autocomplete?: boolean; min_value?: number; max_value?: number }> }> };
   const plate = command.options.find((option) => option.name === "plate");
   const level = command.options.find((option) => option.name === "level");
+  assert.equal(plate?.options?.find((option) => option.name === "version")?.required, true);
+  assert.equal(plate?.options?.find((option) => option.name === "version")?.autocomplete, true);
   assert.equal(plate?.options?.find((option) => option.name === "kind")?.required, true);
   const plateCount = plate?.options?.find((option) => option.name === "count");
   assert.equal(plateCount?.min_value, 1);
