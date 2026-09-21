@@ -47,7 +47,7 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
     assert.equal(fetchCount, 2);
 
     const newChartRanking = await catalog.newestChartConstantRanking([{
-      title: "New", difficulty: "MASTER", level: "14", achievements: 98, rating: 0, chartKind: "new", chartType: "dx"
+      title: "New", difficulty: "MASTER", level: "14", achievements: 98, rating: 0, chartKind: "new"
     }]);
     assert.deepEqual(newChartRanking.map((score) => score.title), ["New", "Unplayed"]);
     assert.deepEqual(newChartRanking.map((score) => score.achievements), [98, undefined]);

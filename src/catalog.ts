@@ -71,6 +71,10 @@ export class MaimaiCatalog {
     return [normalize(title), type, difficulty.toLowerCase(), normalize(level ?? "")].join("\u0000");
   }
 
+  private legacyKey(title: string, difficulty: string, level: string | undefined): string {
+    return [normalize(title), difficulty.toLowerCase(), normalize(level ?? "")].join("\u0000");
+  }
+
   private async load(needsVersionMetadata: boolean): Promise<LoadedCatalog> {
     const cachedIndex = this.cachedIndex;
     const cachedCharts = this.cachedCharts;
@@ -173,10 +177,23 @@ export class MaimaiCatalog {
     const scoresByChart = new Map(scores.flatMap((score) => score.chartType
       ? [[this.key(score.title, score.chartType, score.difficulty, score.level), score] as const]
       : []));
-    return charts
-      .filter((chart) => chart.version !== undefined && newestVersions.has(chart.version))
+    const newCharts = charts.filter((chart) => chart.version !== undefined && newestVersions.has(chart.version));
+    const legacyScores = new Map<string, ScoreRecord | null>();
+    for (const score of scores) {
+      if (score.chartType) continue;
+      const key = this.legacyKey(score.title, score.difficulty, score.level);
+      legacyScores.set(key, legacyScores.has(key) ? null : score);
+    }
+    const chartCountByLegacyKey = new Map<string, number>();
+    for (const chart of newCharts) {
+      const key = this.legacyKey(chart.title, chart.difficulty, chart.level);
+      chartCountByLegacyKey.set(key, (chartCountByLegacyKey.get(key) ?? 0) + 1);
+    }
+    return newCharts
       .map((chart) => {
-        const score = scoresByChart.get(chart.key);
+        const legacyKey = this.legacyKey(chart.title, chart.difficulty, chart.level);
+        const score = scoresByChart.get(chart.key)
+          ?? (chartCountByLegacyKey.get(legacyKey) === 1 ? legacyScores.get(legacyKey) ?? undefined : undefined);
         return {
           title: chart.title,
           difficulty: chart.difficulty,

@@ -51,9 +51,9 @@ test("score card frames use the maimai difficulty colours", () => {
 });
 
 test("new chart constant rows distinguish unplayed scores while keeping achievements aligned", () => {
-  const played = renderNewConstantScore({ title: "Played", difficulty: "MASTER", rating: 0, internalLevel: 14.5, achievements: 100 }, 0);
-  const unplayed = renderNewConstantScore({ title: "Unplayed", difficulty: "MASTER", rating: 0, internalLevel: 14.4 }, 1);
-  assert.equal(played, "# 1 [14.5] 100.0000% / Played");
-  assert.equal(unplayed, "# 2 [14.4]        -% / Unplayed");
+  const played = renderNewConstantScore({ title: "Played", difficulty: "MASTER", rating: 0, internalLevel: 14.5, achievements: 100, chartType: "dx" }, 0);
+  const unplayed = renderNewConstantScore({ title: "Unplayed", difficulty: "MASTER", rating: 0, internalLevel: 14.4, chartType: "standard" }, 1);
+  assert.equal(played, "# 1 [14.5] 100.0000% / DX MASTER / Played");
+  assert.equal(unplayed, "# 2 [14.4]        -% / STD MASTER / Unplayed");
   assert.equal(played.indexOf("%"), unplayed.indexOf("%"));
 });

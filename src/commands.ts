@@ -85,7 +85,8 @@ function renderMobileScore(score: ScoreRecord, index: number): string {
 export function renderNewConstantScore(score: ScoreRecord, index: number): string {
   const constant = `[${score.internalLevel?.toFixed(1) ?? "?"}]`;
   const achievement = score.achievements === undefined ? "-%" : `${score.achievements.toFixed(4)}%`;
-  return `#${String(index + 1).padStart(2)} ${constant} ${achievement.padStart(9)} / ${truncateSongTitle(score.title)}`;
+  const chart = `${score.chartType === "standard" ? "STD" : "DX"} ${score.difficulty.toUpperCase()}`;
+  return `#${String(index + 1).padStart(2)} ${constant} ${achievement.padStart(9)} / ${chart} / ${truncateSongTitle(score.title)}`;
 }
 
 function splitLines(lines: string[], maxLength = 3_800): string[] {
@@ -184,9 +185,9 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         { name: "/maimai best [kind] [image]", value: "PC向けの詳しいベスト枠表示。image を有効にするとジャケット付きカード画像" },
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
         { name: "/maimai image [kind]", value: "ベスト枠を画像で表示" },
-        { name: "/maimai candidate [kind] [count] [image]", value: "次ランク到達でBestレートが伸びる候補。枠外候補の算出には /maimai fsync が必要（既定10件、最大30件）" },
-        { name: "/maimai dxscore <level> [count] [image]", value: "指定レベルのDXスコア%順。現在DXスコア / 譜面ごとの最大DXスコアを表示" },
-        { name: "/maimai dxstar <level> <star> [count] [image]", value: "指定レベルで、次の指定星まであと何DXスコアかが少ない順。star は1〜6" },
+        { name: "/maimai candidate [kind] [count] [image]", value: "次ランク到達でBestレートが伸びる候補。枠外候補の算出には /maimai fsync が必要（既定10件、最大50件）" },
+        { name: "/maimai dxscore <level> [count] [image]", value: "指定レベルのDXスコア%順。現在DXスコア / 譜面ごとの最大DXスコアを表示（既定10件、最大50件）" },
+        { name: "/maimai dxstar <level> <star> [count] [image]", value: "指定レベルで、次の指定星まであと何DXスコアかが少ない順。star は1〜6（既定10件、最大50件）" },
         { name: "kind", value: "新曲 / 旧曲 / 全曲。省略時は全曲。" }
       );
     await interaction.reply({ embeds: [embed], ephemeral: true });

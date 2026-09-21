@@ -12,9 +12,9 @@ maimai DX NETのスコアを同期し、DiscordでBest 50を表示するBotで�
 | `/maimai best [kind]` | 定数・単曲レート・達成率を含むベスト枠を表示 |
 | `/maimai mbest [kind]` | スマホ向けの短いベスト枠を表示 |
 | `/maimai image [kind]` | ベスト枠を画像で表示 |
-| `/maimai candidate [kind] [count]` | 次ランク到達でBestレートが伸びる候補。枠外候補は `fsync` 後に利用可能、既定10件・最大30件 |
-| `/maimai dxscore <level> [count]` | 指定レベルのDXスコア%順。スコアは譜面ごとの最大DXスコアに対する割合で表示 |
-| `/maimai dxstar <level> <star> [count]` | 指定レベルで、現在の星から次の指定星までに必要なDXスコアが少ない順。`star` は1〜6 |
+| `/maimai candidate [kind] [count]` | 次ランク到達でBestレートが伸びる候補。枠外候補は `fsync` 後に利用可能、既定10件・最大50件 |
+| `/maimai dxscore <level> [count]` | 指定レベルのDXスコア%順。スコアは譜面ごとの最大DXスコアに対する割合で表示、既定10件・最大50件 |
+| `/maimai dxstar <level> <star> [count]` | 指定レベルで、現在の星から次の指定星までに必要なDXスコアが少ない順。`star` は1〜6、既定10件・最大50件 |
 
 `kind` は `新曲` / `旧曲` / `全曲` から選べます。省略時は全曲です。
 
