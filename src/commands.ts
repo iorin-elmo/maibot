@@ -19,6 +19,9 @@ const kindOption = (option: SlashCommandStringOption) =>
 const countOption = (option: SlashCommandIntegerOption) =>
   option.setName("count").setDescription("表示件数（既定: 10、最大: 50）").setMinValue(1).setMaxValue(50);
 
+const newConstantCountOption = (option: SlashCommandIntegerOption) =>
+  option.setName("count").setDescription("表示件数（既定: 30、最大: 50）").setMinValue(1).setMaxValue(50);
+
 const levelOption = (option: SlashCommandStringOption) =>
   option.setName("level").setDescription("対象レベル（例: 14、14+）").setRequired(true);
 
@@ -35,7 +38,7 @@ export const maimaiCommand = new SlashCommandBuilder()
   .addSubcommand((command) => command.setName("sync").setDescription("StandardコースのRatingページから同期します"))
   .addSubcommand((command) => command.setName("fsync").setDescription("無料コースのversion別スコアから同期します"))
   .addSubcommand((command) => command.setName("newconstant").setDescription("新曲譜面を定数が高い順に表示します")
-    .addIntegerOption(countOption))
+    .addIntegerOption(newConstantCountOption))
   .addSubcommand((command) => command.setName("best").setDescription("ベスト枠を表示します")
     .addStringOption(kindOption)
     .addBooleanOption(imageOption))
@@ -181,7 +184,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       .addFields(
         { name: "/maimai sync", value: "Standardコースの「でらっくすRating」ページから同期" },
         { name: "/maimai fsync", value: "無料コース向け。version別スコアからBest 50を計算して同期" },
-        { name: "/maimai newconstant [count]", value: "新曲（最新2バージョン）の全譜面を定数が高い順に表示。未プレイは-%（既定30件、最大50件）" },
+        { name: "/maimai newconstant [count]", value: "新曲（最新2バージョン）のDX/STD譜面を定数が高い順に表示。未プレイとStandardコース同期のBest枠外は-%（既定30件、最大50件）" },
         { name: "/maimai best [kind] [image]", value: "PC向けの詳しいベスト枠表示。image を有効にするとジャケット付きカード画像" },
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
         { name: "/maimai image [kind]", value: "ベスト枠を画像で表示" },
@@ -230,7 +233,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     await interaction.editReply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
       .setColor(0xff5a9e)
       .setTitle(`${playerName} の新曲譜面定数順${index ? "（続き）" : ""}`)
-      .setDescription(`${index ? "" : "**新曲（最新2バージョン）の譜面定数が高い順です。未プレイは -% と表示します。**\n\n"}${description}`)) });
+      .setDescription(`${index ? "" : "**新曲（最新2バージョン）のDX/STD譜面を譜面定数が高い順に表示します。未プレイ、またはStandardコース同期のBest枠外は -% と表示します。全スコアの反映には `/maimai fsync` を利用してください。**\n\n"}${description}`)) });
     return;
   }
   if (subcommand === "dxscore" || subcommand === "dxstar") {
