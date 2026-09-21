@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { renderCandidate, renderDxScore, renderDxStarCandidate } from "../commands.js";
+import { renderCandidate, renderDxScore, renderDxStarCandidate, renderNewConstantScore } from "../commands.js";
 import { difficultyAccent, renderScoreCardImages } from "../best-image.js";
 
 test("候補表示は達成率とランクの桁数に関係なく列がそろう", () => {
@@ -48,4 +48,12 @@ test("score card frames use the maimai difficulty colours", () => {
   assert.equal(difficultyAccent("EXPERT"), "#ed4c55");
   assert.equal(difficultyAccent("MASTER"), "#9a62db");
   assert.equal(difficultyAccent("RE:MASTER"), "#ffffff");
+});
+
+test("new chart constant rows distinguish unplayed scores while keeping achievements aligned", () => {
+  const played = renderNewConstantScore({ title: "Played", difficulty: "MASTER", rating: 0, internalLevel: 14.5, achievements: 100, chartType: "dx" }, 0);
+  const unplayed = renderNewConstantScore({ title: "Unplayed", difficulty: "MASTER", rating: 0, internalLevel: 14.4, chartType: "standard" }, 1);
+  assert.equal(played, "# 1 [14.5] 100.0000% / DX MASTER / Played");
+  assert.equal(unplayed, "# 2 [14.4]        -% / STD MASTER / Unplayed");
+  assert.equal(played.indexOf("%"), unplayed.indexOf("%"));
 });
