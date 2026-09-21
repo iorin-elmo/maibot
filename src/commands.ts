@@ -1,7 +1,7 @@
 import {
   AttachmentBuilder, EmbedBuilder, SlashCommandBuilder, type ChatInputCommandInteraction, type SlashCommandIntegerOption, type SlashCommandStringOption
 } from "discord.js";
-import { achievementRank, bestCandidates, bestScores, type BestCandidate } from "./analysis.js";
+import { achievementRank, bestCandidates, bestScores, dxScorePercent, dxStar, dxStarCandidates, type BestCandidate, type DxStarCandidate } from "./analysis.js";
 import { makeFreeBookmarklet, makePremiumBookmarkletSecure } from "./browser-sync.js";
 import { renderBestImage } from "./best-image.js";
 import type { BotDatabase } from "./database.js";
@@ -18,6 +18,12 @@ const kindOption = (option: SlashCommandStringOption) =>
 const countOption = (option: SlashCommandIntegerOption) =>
   option.setName("count").setDescription("表示件数（既定: 10、最大: 30）").setMinValue(1).setMaxValue(30);
 
+const levelOption = (option: SlashCommandStringOption) =>
+  option.setName("level").setDescription("対象レベル（例: 14、14+）").setRequired(true);
+
+const starOption = (option: SlashCommandIntegerOption) =>
+  option.setName("star").setDescription("目標のDXスコア星").setRequired(true).setMinValue(1).setMaxValue(6);
+
 export const maimaiCommand = new SlashCommandBuilder()
   .setName("maimai")
   .setDescription("maimaiのベスト枠を表示します")
@@ -32,6 +38,13 @@ export const maimaiCommand = new SlashCommandBuilder()
     .addStringOption(kindOption))
   .addSubcommand((command) => command.setName("candidate").setDescription("次ランク到達でBestレートが伸びる候補譜面を表示")
     .addStringOption(kindOption)
+    .addIntegerOption(countOption))
+  .addSubcommand((command) => command.setName("dxscore").setDescription("指定レベルのDXスコア%順を表示")
+    .addStringOption(levelOption)
+    .addIntegerOption(countOption))
+  .addSubcommand((command) => command.setName("dxstar").setDescription("指定したDXスコア星まであと少しの譜面を表示")
+    .addStringOption(levelOption)
+    .addIntegerOption(starOption)
     .addIntegerOption(countOption));
 
 function renderMarkdownScore(score: ScoreRecord, index: number, mixed: boolean): string {
@@ -95,6 +108,23 @@ export function renderCandidate(candidate: BestCandidate, index: number): string
   return `${currentScore} → ${nextRank} ${ratingGain} / ${truncateSongTitle(score.title)}`;
 }
 
+export function renderDxScore(score: ScoreRecord, index: number): string {
+  const percent = dxScorePercent(score);
+  const stars = dxStar(score);
+  if (percent === undefined || stars === undefined || score.dxScore === undefined || score.dxScoreMax === undefined) {
+    throw new Error("DXスコアの表示に必要なデータがありません。");
+  }
+  return `#${String(index + 1).padStart(2)} ${String(score.dxScore).padStart(4)}/${score.dxScoreMax} (${percent.toFixed(3)}%) ☆${stars} / ${truncateSongTitle(score.title)}`;
+}
+
+export function renderDxStarCandidate(candidate: DxStarCandidate, index: number, missingScoreWidth = 1): string {
+  const missingScore = String(candidate.missingScore);
+  // Keep the right edge of the deficit aligned, while moving padding before
+  // the minus sign so that `- 1` is never emitted.
+  const target = `☆${candidate.targetStars} ${" ".repeat(Math.max(0, missingScoreWidth - missingScore.length))}-${missingScore}`;
+  return renderDxScore(candidate.score, index).replace(`☆${candidate.currentStars}`, target);
+}
+
 function candidateEmbeds(playerName: string, kind: "new" | "old", candidates: BestCandidate[], hasOutsideCharts: boolean): EmbedBuilder[] {
   const label = kind === "new" ? "新曲枠の候補" : "旧曲枠の候補";
   const syncNote = hasOutsideCharts ? "" : "Best枠外の候補を含めるには `/maimai fsync` が必要です。\n";
@@ -122,6 +152,8 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
         { name: "/maimai image [kind]", value: "ベスト枠を画像で表示" },
         { name: "/maimai candidate [kind] [count]", value: "次ランク到達でBestレートが伸びる候補。枠外候補の算出には /maimai fsync が必要（既定10件、最大30件）" },
+        { name: "/maimai dxscore <level> [count]", value: "指定レベルのDXスコア%順。現在DXスコア / 譜面ごとの最大DXスコアを表示" },
+        { name: "/maimai dxstar <level> <star> [count]", value: "指定レベルで、次の指定星まであと何DXスコアかが少ない順。star は1〜6" },
         { name: "kind", value: "新曲 / 旧曲 / 全曲。省略時は全曲。" }
       );
     await interaction.reply({ embeds: [embed], ephemeral: true });
@@ -149,10 +181,45 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
 
   const kind = interaction.options.getString("kind") ?? "all";
   const allScores = db.getScores(interaction.user.id);
+  const playerName = account.playerName ?? "maimai";
+  if (subcommand === "dxscore" || subcommand === "dxstar") {
+    const level = interaction.options.getString("level", true).trim();
+    const count = interaction.options.getInteger("count") ?? 10;
+    if (subcommand === "dxscore") {
+      const scores = allScores
+        .filter((score) => score.level === level && dxScorePercent(score) !== undefined)
+        .sort((a, b) => (dxScorePercent(b) ?? 0) - (dxScorePercent(a) ?? 0)
+          || (b.dxScore ?? 0) - (a.dxScore ?? 0)
+          || a.title.localeCompare(b.title, "ja"))
+        .slice(0, count);
+      if (!scores.length) {
+        await interaction.reply({ content: `Lv.${level} のDXスコアを表示できる譜面がありません。 \`/maimai fsync\` を再実行してからお試しください。`, ephemeral: true });
+        return;
+      }
+      const descriptions = splitLines(scores.map(renderDxScore), 3_900).map(asCodeBlock);
+      await interaction.reply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
+        .setColor(0xff5a9e)
+        .setTitle(`${playerName} の Lv.${level} DXスコア%順${index ? "（続き）" : ""}`)
+        .setDescription(`${index ? "" : "**このレベルのDXスコア（現在値 ÷ 譜面ごとの最大値）順**\n\n"}${description}`)) });
+      return;
+    }
+
+    const targetStars = interaction.options.getInteger("star", true);
+    const candidates = dxStarCandidates(allScores, level, targetStars, count);
+    if (!candidates.length) {
+      await interaction.reply({ content: `Lv.${level} に ☆${targetStars} 未満のDXスコア候補がありません。 \`/maimai fsync\` を再実行してからお試しください。`, ephemeral: true });
+      return;
+    }
+    const missingScoreWidth = String(Math.max(...candidates.map((candidate) => candidate.missingScore))).length;
+    const descriptions = splitLines(candidates.map((candidate, index) => renderDxStarCandidate(candidate, index, missingScoreWidth)), 3_900).map(asCodeBlock);
+    await interaction.reply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
+      .setColor(0xff5a9e)
+      .setTitle(`${playerName} の Lv.${level} ☆${targetStars}候補曲${index ? "（続き）" : ""}`)
+      .setDescription(`${index ? "" : `**☆${targetStars}を目標に、現在の星が高い譜面から次の星までの必要DXスコア順**\n\n`}${description}`)) });
+    return;
+  }
   const newBest = bestScores(allScores, "new", 15).map((score, index) => ({ ...score, officialRank: score.officialRank ?? index + 1 }));
   const oldBest = bestScores(allScores, "old", 35).map((score, index) => ({ ...score, officialRank: score.officialRank ?? index + 1 }));
-  const playerName = account.playerName ?? "maimai";
-
   if (subcommand === "candidate") {
     const count = interaction.options.getInteger("count") ?? 10;
     const requestedKinds: Array<"new" | "old"> = kind === "new" ? ["new"] : kind === "old" ? ["old"] : ["new", "old"];

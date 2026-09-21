@@ -55,6 +55,59 @@ export interface BestCandidate {
   achievementGap: number;
 }
 
+/** DX score star thresholds, indexed by the number of stars earned. */
+// ☆6 is the non-official 99% milestone; the in-game DX stars end at ☆5.
+export const dxStarThresholds = [0, 85, 90, 93, 95, 97, 99] as const;
+
+export function dxScorePercent(score: ScoreRecord): number | undefined {
+  if (typeof score.dxScore !== "number" || typeof score.dxScoreMax !== "number" || score.dxScoreMax <= 0) return undefined;
+  return score.dxScore / score.dxScoreMax * 100;
+}
+
+export function dxStar(score: ScoreRecord): number | undefined {
+  const percent = dxScorePercent(score);
+  if (percent === undefined) return undefined;
+  for (let stars = 6; stars >= 0; stars -= 1) {
+    if (percent >= dxStarThresholds[stars]) return stars;
+  }
+  return 0;
+}
+
+export interface DxStarCandidate {
+  score: ScoreRecord;
+  currentStars: number;
+  targetStars: number;
+  missingScore: number;
+}
+
+/**
+ * Returns charts below the requested target. Charts one star below it are
+ * listed first; lower-star charts fill the requested count when necessary.
+ * Each row always shows the exact DX points required for that chart's next
+ * star, rather than a multi-star jump.
+ */
+export function dxStarCandidates(scores: ScoreRecord[], level: string, requestedStars: number, limit = 10): DxStarCandidate[] {
+  if (dxStarThresholds[requestedStars] === undefined || requestedStars < 1) return [];
+  return scores.flatMap((score): DxStarCandidate[] => {
+    const currentStars = dxStar(score);
+    if (score.level !== level || currentStars === undefined || currentStars >= requestedStars || score.dxScore === undefined || score.dxScoreMax === undefined) return [];
+    const targetStars = currentStars + 1;
+    const threshold = dxStarThresholds[targetStars];
+    return [{
+      score,
+      currentStars,
+      targetStars,
+      // Scores are integral. Reaching a fractional percentage threshold must
+      // round up to the next attainable DX point.
+      missingScore: Math.max(0, Math.ceil(score.dxScoreMax * threshold / 100) - score.dxScore)
+    }];
+  }).sort((a, b) => b.currentStars - a.currentStars
+    || a.missingScore - b.missingScore
+    || (dxScorePercent(b.score) ?? 0) - (dxScorePercent(a.score) ?? 0)
+    || a.score.title.localeCompare(b.score.title, "ja"))
+    .slice(0, limit);
+}
+
 /**
  * Finds charts which would improve the Best total at a higher achievement
  * rank. Charts outside the frame are compared with the lowest-rated chart in
@@ -118,6 +171,7 @@ export function validateProfile(value: unknown): ImportedProfile {
     if (!Number.isFinite(score.rating)) throw new Error(`scores[${index}].rating が不正です。`);
     if (score.achievements !== undefined && !Number.isFinite(score.achievements)) throw new Error(`scores[${index}].achievements が不正です。`);
     if (score.dxScore !== undefined && (!Number.isInteger(score.dxScore) || score.dxScore < 0)) throw new Error(`scores[${index}].dxScore が不正です。`);
+    if (score.dxScoreMax !== undefined && (!Number.isInteger(score.dxScoreMax) || score.dxScoreMax < 1)) throw new Error(`scores[${index}].dxScoreMax が不正です。`);
     if (score.chartType !== undefined && score.chartType !== "dx" && score.chartType !== "standard") throw new Error(`scores[${index}].chartType が不正です。`);
     if (score.internalLevel !== undefined && !Number.isFinite(score.internalLevel)) throw new Error(`scores[${index}].internalLevel が不正です。`);
     if (score.chartKind && !["new", "old", "unknown"].includes(score.chartKind)) {
@@ -128,7 +182,7 @@ export function validateProfile(value: unknown): ImportedProfile {
     }
     return {
       title: score.title.trim(), difficulty: score.difficulty.trim(), level: score.level,
-      achievements: score.achievements, dxScore: score.dxScore, rating: score.rating as number,
+      achievements: score.achievements, dxScore: score.dxScore, dxScoreMax: score.dxScoreMax, rating: score.rating as number,
       chartKind: score.chartKind ?? "unknown", chartType: score.chartType, internalLevel: score.internalLevel,
       officialRank: score.officialRank, playedAt: score.playedAt
     };

@@ -26,6 +26,7 @@ export class BotDatabase {
         level TEXT,
         achievements REAL,
         dx_score INTEGER,
+        dx_score_max INTEGER,
         rating REAL NOT NULL,
         chart_kind TEXT NOT NULL CHECK(chart_kind IN ('new', 'old', 'unknown')),
         chart_type TEXT CHECK(chart_type IN ('dx', 'standard')),
@@ -43,6 +44,7 @@ export class BotDatabase {
     try { this.db.exec("ALTER TABLE scores ADD COLUMN official_rank INTEGER"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE scores ADD COLUMN chart_type TEXT"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE scores ADD COLUMN internal_level REAL"); } catch { /* existing database */ }
+    try { this.db.exec("ALTER TABLE scores ADD COLUMN dx_score_max INTEGER"); } catch { /* existing database */ }
   }
 
   link(discordUserId: string, segaId: string): void {
@@ -94,10 +96,10 @@ export class BotDatabase {
         .run(profile.playerName, profile.rating, profile.updatedAt ?? new Date().toISOString(), discordUserId);
       this.db.prepare("DELETE FROM scores WHERE discord_user_id = ?").run(discordUserId);
       const insert = this.db.prepare(`INSERT INTO scores
-        (discord_user_id, title, difficulty, level, achievements, dx_score, rating, chart_kind, chart_type, internal_level, official_rank, played_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        (discord_user_id, title, difficulty, level, achievements, dx_score, dx_score_max, rating, chart_kind, chart_type, internal_level, official_rank, played_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
       for (const score of profile.scores) insert.run(discordUserId, score.title, score.difficulty, score.level ?? null,
-        score.achievements ?? null, score.dxScore ?? null, score.rating, score.chartKind ?? "unknown", score.chartType ?? null,
+        score.achievements ?? null, score.dxScore ?? null, score.dxScoreMax ?? null, score.rating, score.chartKind ?? "unknown", score.chartType ?? null,
         score.internalLevel ?? null, score.officialRank ?? null, score.playedAt ?? null);
       this.db.exec("COMMIT");
     } catch (error) {
@@ -107,7 +109,7 @@ export class BotDatabase {
   }
 
   getScores(discordUserId: string): ScoreRecord[] {
-    const rows = this.db.prepare(`SELECT title, difficulty, level, achievements AS achievements, dx_score AS dxScore,
+    const rows = this.db.prepare(`SELECT title, difficulty, level, achievements AS achievements, dx_score AS dxScore, dx_score_max AS dxScoreMax,
       rating, chart_kind AS chartKind, chart_type AS chartType, internal_level AS internalLevel,
       official_rank AS officialRank, played_at AS playedAt FROM scores WHERE discord_user_id = ?`).all(discordUserId) as unknown as ScoreRecord[];
     return rows.map((score) => ({
@@ -115,6 +117,7 @@ export class BotDatabase {
       level: score.level ?? undefined,
       achievements: score.achievements ?? undefined,
       dxScore: score.dxScore ?? undefined,
+      dxScoreMax: score.dxScoreMax ?? undefined,
       chartType: score.chartType ?? undefined,
       internalLevel: score.internalLevel ?? undefined,
       officialRank: score.officialRank ?? undefined,

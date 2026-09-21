@@ -4,7 +4,7 @@ import type { MaimaiCatalog } from "./catalog.js";
 import type { BotDatabase } from "./database.js";
 import type { ChartKind, ImportedProfile } from "./types.js";
 
-interface BrowserScore { title: string; difficulty: string; level?: string; achievements?: number; chartKind: ChartKind; chartType: "dx" | "standard"; officialRank?: number; }
+interface BrowserScore { title: string; difficulty: string; level?: string; achievements?: number; dxScore?: number; chartKind: ChartKind; chartType: "dx" | "standard"; officialRank?: number; }
 interface BrowserPayload { playerName: string; rating: number; scores: BrowserScore[]; }
 
 const importQueues = new Map<string, Promise<void>>();
@@ -32,8 +32,8 @@ function asProfile(payload: BrowserPayload): ImportedProfile {
     playerName: payload.playerName,
     rating: payload.rating,
     updatedAt: new Date().toISOString(),
-    scores: payload.scores.map(({ title, difficulty, level, achievements, chartKind, chartType, officialRank }) => ({
-      title, difficulty, level, achievements, chartKind, chartType, officialRank, rating: 0
+    scores: payload.scores.map(({ title, difficulty, level, achievements, dxScore, chartKind, chartType, officialRank }) => ({
+      title, difficulty, level, achievements, dxScore, chartKind, chartType, officialRank, rating: 0
     }))
   });
 }
@@ -61,7 +61,14 @@ function mergeStandardScores(existing: ImportedProfile["scores"], incoming: Impo
         if (existingScore.chartType === undefined && legacyScoreKey(existingScore) === legacyKey) merged.delete(key);
       }
     }
-    merged.set(scoreKey(score), score);
+    const existingScore = merged.get(scoreKey(score));
+    // The Rating page does not expose a DX score on every layout. Preserve a
+    // previously collected value from a full sync when the incoming row lacks it.
+    merged.set(scoreKey(score), {
+      ...score,
+      dxScore: score.dxScore ?? existingScore?.dxScore,
+      dxScoreMax: score.dxScoreMax ?? existingScore?.dxScoreMax
+    });
   }
   return [...merged.values()];
 }
@@ -104,6 +111,12 @@ async function serializeImport<T>(discordUserId: string, task: () => Promise<T>)
 
 function makeFreeSyncScriptWithHeader(baseUrl: string, token: string): string {
   return makeFreeSyncScript(baseUrl, token)
+    .replace(
+      'achievements=number(q(".music_score_block.w_120")?.textContent||q(".music_score_block")?.textContent),dxScore=number(q(".music_dx_score_block")?.textContent||q(".dx_score_block")?.textContent)',
+      'blocks=Array.from(row.querySelectorAll?.(".music_score_block")||[]),achievements=number(blocks.find(b=>String(b.textContent||"").includes("%"))?.textContent||q(".music_score_block.w_120")?.textContent||q(".music_score_block")?.textContent),dxScore=number(q(".music_dx_score_block")?.textContent||q(".dx_score_block")?.textContent||blocks.find(b=>!String(b.textContent||"").includes("%"))?.textContent)'
+    )
+    .replace(',status=', ',integer=value=>{const match=String(value??"").match(/\\d[\\d,]*/);if(!match)return undefined;const parsed=Number(match[0].replace(/,/g,""));return Number.isInteger(parsed)?parsed:undefined},status=')
+    .replace('dxScore=number(', 'dxScore=integer(')
     .replace('headers:{"Content-Type":"application/json"}', 'headers:{"Content-Type":"application/json","X-Import-Token":token}')
     .replace('JSON.stringify({token,playerName', 'JSON.stringify({playerName')
     .replace('fetch(url)', 'fetch(url,{redirect:"error"})')
@@ -117,7 +130,7 @@ function makeFreeSyncScriptWithHeader(baseUrl: string, token: string): string {
 /** The only free-course scraper served to browsers. */
 function makeFreeSyncScript(baseUrl: string, token: string): string {
   const endpoint = new URL("/v1/browser-sync", baseUrl).toString();
-  return String.raw`(()=>{const endpoint=${JSON.stringify(endpoint)},token=${JSON.stringify(token)},origin=location.origin;if(location.hostname!=="maimaidx.jp"){alert("maimai DX NET上で実行してください。");return}const number=value=>{const text=String(value??"").replace(/[^0-9.]/g,"");if(!text)return undefined;const parsed=Number(text);return Number.isFinite(parsed)?parsed:undefined},status=(()=>{const e=document.createElement("div");e.style.cssText="position:fixed;z-index:99999;left:8px;right:8px;bottom:8px;padding:12px;background:#2c243b;color:#fff;font-weight:bold;border-radius:6px;text-align:center";document.body.append(e);return e})(),rows=document=>[...document.querySelectorAll(".main_wrapper.t_c .m_15,div.w_450.m_15")].map(row=>{const q=s=>row.querySelector(s),title=q(".music_name_block")?.textContent?.trim(),level=q(".music_lv_block")?.textContent?.trim(),achievements=number(q(".music_score_block.w_120")?.textContent||q(".music_score_block")?.textContent),cls=String(row.firstElementChild?.className||""),image=(q("img.h_20.f_l")?.getAttribute("src")||"").toLowerCase(),raw=cls.match(/music_([a-z]+)_score_back/)?.[1]||["remaster","basic","advanced","expert","master"].find(v=>image.includes(v));if(!title||achievements===undefined||!raw)return null;const difficulty=raw.toLowerCase().startsWith("re")?"REMASTER":raw.toUpperCase(),kindImage=q("img.music_kind_icon")?.getAttribute("src")||"";return{title,difficulty,level,achievements,chartKind:"unknown",chartType:row.id.includes("sta_")||kindImage.includes("standard")?"standard":"dx"}}).filter(Boolean),run=async()=>{const scores=[];for(let difficulty=0;difficulty<5;difficulty++){const url=new URL("/maimai-mobile/record/musicGenre/search/",origin);url.searchParams.set("genre","99");url.searchParams.set("diff",String(difficulty));status.textContent="スコア取得中… "+(difficulty+1)+" / 5";const response=await fetch(url);if(!response.ok)throw Error("スコア取得に失敗しました。");scores.push(...rows(new DOMParser().parseFromString(await response.text(),"text/html")))}const unique=new Map;for(const score of scores){const key=[score.title,score.difficulty,score.level||"",score.chartType].join("\\u0000"),old=unique.get(key);if(!old||score.achievements>old.achievements)unique.set(key,score)}if(!unique.size)throw Error("スコアを読み取れませんでした。ログイン状態を確認してください。");const playerName=document.querySelector(".name_block")?.textContent?.trim()||"maimai player",rating=number(document.querySelector(".rating_block")?.textContent)||0;status.textContent="Botへ送信中…";const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,playerName,rating,scores:[...unique.values()]})}),result=await response.json();status.remove();if(!response.ok)throw Error(result.error||"同期に失敗しました。");alert("Botへ"+result.count+"件を同期しました。")};run().catch(error=>{status.remove();alert("同期できませんでした: "+error.message)})})();`;
+  return String.raw`(()=>{const endpoint=${JSON.stringify(endpoint)},token=${JSON.stringify(token)},origin=location.origin;if(location.hostname!=="maimaidx.jp"){alert("maimai DX NET上で実行してください。");return}const number=value=>{const text=String(value??"").replace(/[^0-9.]/g,"");if(!text)return undefined;const parsed=Number(text);return Number.isFinite(parsed)?parsed:undefined},status=(()=>{const e=document.createElement("div");e.style.cssText="position:fixed;z-index:99999;left:8px;right:8px;bottom:8px;padding:12px;background:#2c243b;color:#fff;font-weight:bold;border-radius:6px;text-align:center";document.body.append(e);return e})(),rows=document=>[...document.querySelectorAll(".main_wrapper.t_c .m_15,div.w_450.m_15")].map(row=>{const q=s=>row.querySelector(s),title=q(".music_name_block")?.textContent?.trim(),level=q(".music_lv_block")?.textContent?.trim(),achievements=number(q(".music_score_block.w_120")?.textContent||q(".music_score_block")?.textContent),dxScore=number(q(".music_dx_score_block")?.textContent||q(".dx_score_block")?.textContent),cls=String(row.firstElementChild?.className||""),image=(q("img.h_20.f_l")?.getAttribute("src")||"").toLowerCase(),raw=cls.match(/music_([a-z]+)_score_back/)?.[1]||["remaster","basic","advanced","expert","master"].find(v=>image.includes(v));if(!title||achievements===undefined||!raw)return null;const difficulty=raw.toLowerCase().startsWith("re")?"REMASTER":raw.toUpperCase(),kindImage=q("img.music_kind_icon")?.getAttribute("src")||"";return{title,difficulty,level,achievements,dxScore,chartKind:"unknown",chartType:row.id.includes("sta_")||kindImage.includes("standard")?"standard":"dx"}}).filter(Boolean),run=async()=>{const scores=[];for(let difficulty=0;difficulty<5;difficulty++){const url=new URL("/maimai-mobile/record/musicGenre/search/",origin);url.searchParams.set("genre","99");url.searchParams.set("diff",String(difficulty));status.textContent="スコア取得中… "+(difficulty+1)+" / 5";const response=await fetch(url);if(!response.ok)throw Error("スコア取得に失敗しました。");scores.push(...rows(new DOMParser().parseFromString(await response.text(),"text/html")))}const unique=new Map;for(const score of scores){const key=[score.title,score.difficulty,score.level||"",score.chartType].join("\\u0000"),old=unique.get(key);if(!old||score.achievements>old.achievements)unique.set(key,score)}if(!unique.size)throw Error("スコアを読み取れませんでした。ログイン状態を確認してください。");const playerName=document.querySelector(".name_block")?.textContent?.trim()||"maimai player",rating=number(document.querySelector(".rating_block")?.textContent)||0;status.textContent="Botへ送信中…";const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,playerName,rating,scores:[...unique.values()]})}),result=await response.json();status.remove();if(!response.ok)throw Error(result.error||"同期に失敗しました。");alert("Botへ"+result.count+"件を同期しました。")};run().catch(error=>{status.remove();alert("同期できませんでした: "+error.message)})})();`;
 }
 
 function validateImportBaseUrl(url: URL): void {
@@ -182,6 +195,10 @@ export function makeFreeBookmarklet(baseUrl: string, token: string): string {
 
 export function makePremiumBookmarkletSecure(baseUrl: string, token: string): string {
   return makePremiumBookmarkletInsecure(baseUrl, token)
+    .replace('a=n(q("div.music_score_block")?.textContent),src=', 'blocks=Array.from(r.querySelectorAll?.(".music_score_block")||[]),a=n(blocks.find(b=>String(b.textContent||"").includes("%"))?.textContent||q("div.music_score_block")?.textContent),dx=n(q(".music_dx_score_block")?.textContent||q(".dx_score_block")?.textContent||blocks.find(b=>!String(b.textContent||"").includes("%"))?.textContent),src=')
+    .replace('level,achievements:a,chartKind:kind', 'level,achievements:a,dxScore:dx,chartKind:kind')
+    .replace('return Number.isFinite(x)?x:undefined};if(location.hostname', 'return Number.isFinite(x)?x:undefined},dxNumber=v=>{const m=String(v??"").match(/\\d[\\d,]*/);if(!m)return;const x=Number(m[0].replace(/,/g,""));return Number.isInteger(x)?x:undefined};if(location.hostname')
+    .replace(',dx=n(', ',dx=dxNumber(')
     .replace('headers:{"Content-Type":"application/json"}', 'headers:{"Content-Type":"application/json","X-Import-Token":t}')
     .replace('JSON.stringify({token:t,playerName:name', 'JSON.stringify({playerName:name')
     .replace('fetch(e,{method:"POST"', 'fetch(e,{method:"POST",redirect:"error"');

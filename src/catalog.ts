@@ -6,6 +6,7 @@ interface CatalogSheet {
   difficulty: string;
   level: string;
   internalLevelValue: number;
+  noteCounts?: { total?: number };
   /** The version in which this particular chart was added. */
   version?: string;
 }
@@ -17,6 +18,7 @@ interface CatalogDocument {
 
 interface CatalogEntry {
   internalLevel: number;
+  dxScoreMax?: number;
   version?: string;
 }
 interface LoadedCatalog {
@@ -33,6 +35,12 @@ function versionId(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed || undefined;
+}
+
+function maximumDxScore(noteCounts: CatalogSheet["noteCounts"]): number | undefined {
+  const total = noteCounts?.total;
+  if (typeof total !== "number" || !Number.isInteger(total) || total < 1) return undefined;
+  return total * 3;
 }
 
 export class MaimaiCatalog {
@@ -70,6 +78,7 @@ export class MaimaiCatalog {
         const type = sheet.type === "std" ? "standard" : "dx";
         index.set(this.key(song.title, type, sheet.difficulty, sheet.level), {
           internalLevel: sheet.internalLevelValue,
+          dxScoreMax: maximumDxScore(sheet.noteCounts),
           version: versionId(sheet.version) ?? versionId(song.version)
         });
       }
@@ -104,9 +113,11 @@ export class MaimaiCatalog {
       if (score.chartKind === "unknown" && (newestVersions.size !== 2 || !entry || !entry.version || !knownVersions.has(entry.version) || score.achievements === undefined)) {
         throw new Error(`譜面定数またはバージョンを照合できませんでした: ${score.title}`);
       }
-      if (!entry || score.achievements === undefined) return score;
+      if (!entry) return score;
+      const enriched = entry.dxScoreMax === undefined ? score : { ...score, dxScoreMax: entry.dxScoreMax };
+      if (score.achievements === undefined) return enriched;
       return {
-        ...score,
+        ...enriched,
         // Free-course collection retrieves every score page. The catalogue is
         // the stable source of the "latest two versions" split, so it does not
         // depend on the layout of the version-index page.

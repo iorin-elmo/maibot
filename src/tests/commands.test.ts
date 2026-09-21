@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { renderCandidate } from "../commands.js";
+import { renderCandidate, renderDxScore, renderDxStarCandidate } from "../commands.js";
 
 test("候補表示は達成率とランクの桁数に関係なく列がそろう", () => {
   const under100 = renderCandidate({
@@ -18,4 +18,13 @@ test("候補表示は達成率とランクの桁数に関係なく列がそろ�
   assert.equal(under100.indexOf("→"), over100.indexOf("→"));
   assert.equal(under100.indexOf("(+"), over100.indexOf("(+"));
   assert.equal(under100.indexOf("/ "), over100.indexOf("/ "));
+});
+
+test("DX score rows use the requested percent, score fraction, and star formats", () => {
+  const score = { title: "DX Song", difficulty: "MASTER", rating: 0, dxScore: 969, dxScoreMax: 1000 };
+  const fourDigitAligned = { title: "Low DX Song", difficulty: "MASTER", rating: 0, dxScore: 969, dxScoreMax: 2229 };
+  assert.equal(renderDxScore(score, 0), "# 1  969/1000 (96.900%) ☆4 / DX Song");
+  assert.equal(renderDxScore(fourDigitAligned, 1), "# 2  969/2229 (43.472%) ☆0 / Low DX Song");
+  assert.equal(renderDxStarCandidate({ score, currentStars: 4, targetStars: 5, missingScore: 1 }, 0), "# 1  969/1000 (96.900%) ☆5 -1 / DX Song");
+  assert.equal(renderDxStarCandidate({ score, currentStars: 4, targetStars: 5, missingScore: 1 }, 0, 2), "# 1  969/1000 (96.900%) ☆5  -1 / DX Song");
 });
