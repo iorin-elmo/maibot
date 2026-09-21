@@ -59,7 +59,10 @@
         <article><code>/maimai candidate [kind] [count]</code><p>次ランク到達でBestレートが伸びる候補譜面を探します。</p></article>
         <article><code>/maimai dxscore &lt;level&gt; [count]</code><p>指定レベルのDXスコア率を高い順で表示します。</p></article>
         <article><code>/maimai dxstar &lt;level&gt; &lt;star&gt; [count]</code><p>指定したDX☆までに必要なスコアが少ない順で表示します。</p></article>
-        <article><code>image:true</code><p><code>best</code>、<code>candidate</code>、<code>dxscore</code>、<code>dxstar</code> を画像で出力できます。</p></article>
+        <article><code>/maimai newconstant [count] [image]</code><p>新曲（最新2バージョン）のDX/STD譜面を、譜面定数が高い順に表示します。未プレイは <code>-%</code> です。</p></article>
+        <article><code>/maimai plate &lt;version&gt; &lt;kind&gt; [count] [image]</code><p>指定プレートの取得に不足している譜面を定数順に表示します。<code>version</code> は候補を入力して絞り込み、<code>kind</code> は神・極・将・舞舞です。</p></article>
+        <article><code>/maimai level &lt;level&gt; &lt;kind&gt; [count] [image]</code><p>指定レベルの未AP+/AP/SSS+/SSS/SS+/SS/S+/S/FC+/FC/FDXを、達成率が高い順に表示します。</p></article>
+        <article><code>count / image:true</code><p><code>count</code> は既定30件・最大50件です。対応コマンドで <code>image:true</code> を指定すると、ジャケット付きのカード画像を1枚で出力できます。</p></article>
       </div>
     </section>
 
@@ -68,6 +71,9 @@
       <details open><summary>同期後に最初に試すコマンドは？</summary><p><code>/maimai image</code> がおすすめです。Best 50をジャケット付きの1枚画像で確認できます。</p></details>
       <details><summary>新曲・旧曲だけを表示したい</summary><p><code>kind</code> に「新曲」「旧曲」「全曲」を指定できます。省略時は全曲です。</p></details>
       <details><summary>DXスコアの☆6は表示できる？</summary><p>できます。☆6は99%以上として計算されます。<code>/maimai dxstar level:14 star:6</code> のように指定してください。</p></details>
+      <details><summary>プレート進捗はどう確認する？</summary><p><code>/maimai plate version:熊 kind:神</code> のように、バージョンと目標を指定します。必要な譜面は定数が高い順に表示され、<code>image:true</code> でジャケット画像にもできます。</p></details>
+      <details><summary>レベルごとに未達成譜面を探せる？</summary><p><code>/maimai level level:14+ kind:AP</code> のように指定します。AP・FC・FDX系はコンボ／シンク状況、ランク系は現在のランクも併せて確認できます。</p></details>
+      <details><summary>新曲で未プレイの譜面も見たい</summary><p><code>/maimai newconstant</code> を使ってください。未プレイは <code>-%</code> として表示されます。全譜面の反映には無料コース向けの <code>/maimai fsync</code> が便利です。</p></details>
       <details><summary>画像のジャケットが表示されない</summary><p>ジャケット配信元への一時的な接続失敗時は、ジャケットなしで出力されます。少し時間をおいてもう一度画像出力してください。</p></details>
     </section>
   </main>
