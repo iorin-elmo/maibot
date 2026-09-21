@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bestCandidates, bestScores, totalBestRating, validateProfile } from "../analysis.js";
+import { bestCandidates, bestScores, dxScorePercent, dxStar, dxStarCandidates, totalBestRating, validateProfile } from "../analysis.js";
 
 test("new/old ごとにレート順でベストを切り出す", () => {
   const scores = [
@@ -61,4 +61,23 @@ test("次ランクでは枠入りしない譜面も、上位ランクでレー�
   assert.equal(result[0].nextAchievement, 100);
   assert.equal(result[0].nextRank, "SSS");
   assert.equal(result[0].ratingGain, 2);
+});
+
+test("DX score percent and next-star candidates are calculated from exact points", () => {
+  const scores = [
+    { title: "Closest", difficulty: "MASTER", level: "14+", rating: 0, dxScore: 969, dxScoreMax: 1000 },
+    { title: "Further", difficulty: "MASTER", level: "14+", rating: 0, dxScore: 965, dxScoreMax: 1000 },
+    { title: "Almost six", difficulty: "MASTER", level: "14+", rating: 0, dxScore: 980, dxScoreMax: 1000 },
+    { title: "Already six", difficulty: "MASTER", level: "14+", rating: 0, dxScore: 991, dxScoreMax: 1000 },
+    { title: "Other level", difficulty: "MASTER", level: "14", rating: 0, dxScore: 969, dxScoreMax: 1000 }
+  ];
+  assert.ok(Math.abs((dxScorePercent(scores[0]) ?? 0) - 96.9) < 1e-10);
+  assert.equal(dxStar(scores[0]), 4);
+  assert.equal(dxStar(scores[3]), 6);
+  const candidates = dxStarCandidates(scores, "14+", 5, 10);
+  assert.deepEqual(candidates.map((candidate) => candidate.score.title), ["Closest", "Further"]);
+  assert.deepEqual(candidates.map((candidate) => candidate.missingScore), [1, 5]);
+  const sixCandidates = dxStarCandidates(scores, "14+", 6, 10);
+  assert.deepEqual(sixCandidates.map((candidate) => candidate.score.title), ["Almost six", "Closest", "Further"]);
+  assert.equal(sixCandidates[0].missingScore, 10);
 });

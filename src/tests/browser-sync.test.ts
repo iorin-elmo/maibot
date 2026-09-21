@@ -76,6 +76,7 @@ test("Standard bookmarklet assigns ranks within the page's new and old sections"
       if (selector === "div.music_name_block") return { textContent: title };
       if (selector === "div.music_lv_block") return { textContent: "14" };
       if (selector === "div.music_score_block") return { textContent: "100.0000%" };
+      if (selector === ".music_dx_score_block") return { textContent: "969" };
       if (selector === "img.h_20.f_l") return { getAttribute: () => "master.png" };
       if (selector === "img.music_kind_icon") return { getAttribute: () => "dx.png" };
       return null;
@@ -108,6 +109,7 @@ test("Standard bookmarklet assigns ranks within the page's new and old sections"
       { title: "First Old", chartKind: "old", officialRank: 1 },
       { title: "Second Old", chartKind: "old", officialRank: 2 }
     ]);
+    assert.equal((payload?.scores[0] as { dxScore?: number } | undefined)?.dxScore, 969);
   } finally {
     globalThis.fetch = original.fetch;
     browser.location = original.location;
@@ -232,14 +234,14 @@ test("生成した無料同期スクリプトは全難易度を収集し、異�
     assert.equal(scriptResponse.status, 200);
     const script = await scriptResponse.text();
     const requestedDifficulties: number[] = [];
-    const sentPayloads: Array<{ scores: Array<{ title: string; achievements: number; chartType: string }> }> = [];
+    const sentPayloads: Array<{ scores: Array<{ title: string; achievements: number; dxScore?: number; chartType: string }> }> = [];
     let mode: "valid" | "invalid" = "valid";
     let resolvePost: (() => void) | undefined;
     const posted = new Promise<void>((resolve) => { resolvePost = resolve; });
     let resolveAlert: ((message: string) => void) | undefined;
     const successAlert = new Promise<string>((resolve) => { resolveAlert = resolve; });
 
-    const row = (achievements: number) => ({
+    const row = (achievements: number, dxScore: number) => ({
       id: "sta_fixture",
       firstElementChild: { className: "music_master_score_back" },
       querySelector: (selector: string) => {
@@ -249,11 +251,14 @@ test("生成した無料同期スクリプトは全難易度を収集し、異�
         if (selector === "img.h_20.f_l") return { getAttribute: () => "master.png" };
         if (selector === "img.music_kind_icon") return { getAttribute: () => "standard.png" };
         return null;
-      }
+      },
+      querySelectorAll: (selector: string) => selector === ".music_score_block"
+        ? [{ textContent: `${achievements}%` }, { textContent: `DX SCORE ${dxScore} / 2193` }]
+        : []
     });
     const scorePage = {
       querySelector: (selector: string) => selector === ".main_wrapper" ? {} : null,
-      querySelectorAll: () => [row(99), row(100)]
+      querySelectorAll: () => [row(99, 1111), row(100, 2222)]
     };
     const invalidPage = { querySelector: () => null, querySelectorAll: () => [] };
     class FixtureDOMParser {
@@ -278,7 +283,7 @@ test("生成した無料同期スクリプトは全難易度を収集し、異�
       }
       if (url.pathname === "/v1/browser-sync") {
         assert.equal((init?.headers as Record<string, string>)["X-Import-Token"], token);
-        const payload = JSON.parse(String(init?.body)) as { scores: Array<{ title: string; achievements: number; chartType: string }> };
+        const payload = JSON.parse(String(init?.body)) as { scores: Array<{ title: string; achievements: number; dxScore?: number; chartType: string }> };
         sentPayloads.push(payload);
         resolvePost?.();
         return { ok: true, json: async () => ({ count: payload.scores.length }) } as Response;
@@ -293,6 +298,7 @@ test("生成した無料同期スクリプトは全難易度を収集し、異�
     assert.deepEqual(sentPayloads[0].scores.map(({ title, achievements, chartType }) => ({ title, achievements, chartType })), [
       { title: "Fixture Song", achievements: 100, chartType: "standard" }
     ]);
+    assert.equal(sentPayloads[0].scores[0].dxScore, 2222);
 
     mode = "invalid";
     requestedDifficulties.length = 0;

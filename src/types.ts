@@ -6,6 +6,8 @@ export interface ScoreRecord {
   level?: string;
   achievements?: number;
   dxScore?: number;
+  /** The chart's theoretical maximum DX score. */
+  dxScoreMax?: number;
   rating: number;
   chartKind?: ChartKind;
   chartType?: "dx" | "standard";
