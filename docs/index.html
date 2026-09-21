@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="maimai Discord Bot の使い方。スコア同期からベスト枠・候補曲の表示までを案内します。">
+  <title>maimai Discord Bot | 使い方</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#top">maimai <span>Discord Bot</span></a>
+    <nav aria-label="ページ内ナビゲーション">
+      <a href="#start">はじめる</a>
+      <a href="#commands">コマンド</a>
+      <a href="#faq">よくある質問</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">MAIMAI DX NET × DISCORD</p>
+        <h1>あなたのmaimai<br><em>ベスト枠</em>を、もっと見やすく。</h1>
+        <p class="lead">maimai DX NETのスコアをDiscordへ同期して、Best 50・伸ばしやすい候補曲・DXスコアをすぐに確認できます。</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#start">使い始める</a>
+          <a class="button secondary" href="#commands">コマンド一覧</a>
+        </div>
+      </div>
+      <aside class="hero-card" aria-label="できること">
+        <p class="card-label">できること</p>
+        <ul>
+          <li><span>01</span> Best 15 + Best 35</li>
+          <li><span>02</span> レートが伸びる候補曲</li>
+          <li><span>03</span> DXスコア / ☆候補</li>
+          <li><span>04</span> ジャケット付き画像出力</li>
+        </ul>
+      </aside>
+    </section>
+
+    <section class="notice" aria-label="安全性について">
+      <strong>SEGA ID・パスワード・CookieはBotへ送信されません。</strong>
+      <span>同期用リンクは1回限り、発行から10分間だけ有効です。</span>
+    </section>
+
+    <section id="start" class="section">
+      <div class="section-heading">
+        <p class="eyebrow">GET STARTED</p>
+        <h2>はじめての同期は3ステップ</h2>
+        <p>Discordとmaimai DX NETを開けば、数分で始められます。</p>
+      </div>
+      <ol class="steps">
+        <li>
+          <span class="step-number">1</span>
+          <h3>Discordで同期コマンドを実行</h3>
+          <p>Standardコースは <code>/maimai sync</code>、無料コースは <code>/maimai fsync</code> を入力します。</p>
+        </li>
+        <li>
+          <span class="step-number">2</span>
+          <h3>返信のコードをブックマークに登録</h3>
+          <p>返信にあるコード全体をコピーし、ブラウザのブックマークURL欄へ貼り付けます。</p>
+        </li>
+        <li>
+          <span class="step-number">3</span>
+          <h3>maimai DX NET上で実行</h3>
+          <p>ログイン済みのページで作成したブックマークを開くと、スコアがBotへ同期されます。</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section split">
+      <div>
+        <p class="eyebrow">SYNC METHOD</p>
+        <h2>コースに合わせて選ぶ</h2>
+        <div class="method-list">
+          <article class="method">
+            <div class="method-icon">S</div>
+            <div>
+              <h3>Standardコース</h3>
+              <p><code>/maimai sync</code> を実行後、「でらっくすRating」ページでブックマークを実行します。公式のBest 50を同期します。</p>
+            </div>
+          </article>
+          <article class="method">
+            <div class="method-icon free">F</div>
+            <div>
+              <h3>無料コース</h3>
+              <p><code>/maimai fsync</code> を実行後、maimai DX NETの任意ページでブックマークを実行します。全譜面からBest 15・Best 35を計算します。</p>
+            </div>
+          </article>
+        </div>
+      </div>
+      <div class="flow" aria-label="同期の流れ">
+        <div>Discord<br><small>同期コマンド</small></div>
+        <b>→</b>
+        <div>ブラウザ<br><small>ブックマーク</small></div>
+        <b>→</b>
+        <div>maimai DX NET<br><small>スコア取得</small></div>
+        <b>→</b>
+        <div>Discord<br><small>結果表示</small></div>
+      </div>
+    </section>
+
+    <section id="commands" class="section command-section">
+      <div class="section-heading">
+        <p class="eyebrow">COMMANDS</p>
+        <h2>目的から選ぶコマンド</h2>
+      </div>
+      <div class="command-grid">
+        <article><code>/maimai best</code><h3>ベスト枠</h3><p>定数・単曲レート・達成率つきでBest 50を表示します。</p></article>
+        <article><code>/maimai image</code><h3>画像で見るBest</h3><p>ジャケット上にスコアを重ねた、5列×10行のBest 50画像を出力します。</p></article>
+        <article><code>/maimai candidate</code><h3>次に伸ばす曲</h3><p>次ランク到達でBestレートが伸びる譜面を探します。</p></article>
+        <article><code>/maimai dxscore level:14</code><h3>DXスコア順</h3><p>指定レベル内のDXスコア率を高い順で表示します。</p></article>
+        <article><code>/maimai dxstar level:14 star:5</code><h3>DX☆候補</h3><p>目標の☆まであと少しの譜面を必要DXスコア順に表示します。</p></article>
+        <article><code>image:true</code><h3>ジャケット付きにする</h3><p><code>best</code>、<code>candidate</code>、<code>dxscore</code>、<code>dxstar</code> で使えます。</p></article>
+      </div>
+    </section>
+
+    <section class="section showcase">
+      <div class="section-heading">
+        <p class="eyebrow">SCREENSHOTS</p>
+        <h2>画面で見ると、もっとわかりやすい</h2>
+        <p>実際の画面キャプチャを追加予定です。</p>
+      </div>
+      <div class="screenshot-grid">
+        <figure class="screenshot-placeholder">
+          <div class="placeholder-icon">⌘</div>
+          <figcaption><strong>Discordでの同期コマンド</strong><br>コマンド入力からブックマークレットの返信まで</figcaption>
+        </figure>
+        <figure class="screenshot-placeholder">
+          <div class="placeholder-icon">↗</div>
+          <figcaption><strong>maimai DX NETでの実行</strong><br>ログイン済みページでブックマークを実行する様子</figcaption>
+        </figure>
+        <figure class="screenshot-placeholder">
+          <div class="placeholder-icon">▦</div>
+          <figcaption><strong>ジャケット付きBest 50</strong><br><code>/maimai image</code> の出力例</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="faq" class="section faq">
+      <div class="section-heading"><p class="eyebrow">FAQ</p><h2>よくある質問</h2></div>
+      <details open><summary>同期が終わったあと、どのコマンドから試せばいい？</summary><p>まずは <code>/maimai image</code> でBest 50を画像表示するのがおすすめです。次に伸ばす曲を探すなら <code>/maimai candidate</code> を使ってください。</p></details>
+      <details><summary>新曲・旧曲だけを見たい</summary><p><code>kind</code> に「新曲」「旧曲」「全曲」を指定できます。省略時は全曲です。</p></details>
+      <details><summary>DXスコアの☆6は表示できる？</summary><p>できます。☆6は99%以上として計算されます。<code>/maimai dxstar level:14 star:6</code> のように指定してください。</p></details>
+      <details><summary>画像のジャケットが表示されない</summary><p>ジャケット配信元への一時的な接続失敗時は、ジャケットなしで出力されます。少し時間をおいてもう一度画像出力してください。</p></details>
+    </section>
+  </main>
+
+  <footer>
+    <p>maimai Discord Bot</p>
+    <a href="https://github.com/iorin-elmo/maibot">GitHub リポジトリを見る</a>
+  </footer>
+</body>
+</html>
