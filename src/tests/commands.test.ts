@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { maimaiCommand, renderCandidate, renderDxScore, renderDxStarCandidate, renderNewConstantScore, renderProgressScore } from "../commands.js";
-import { difficultyAccent, renderScoreCardImages } from "../best-image.js";
+import { difficultyAccent, newConstantCards, progressCards, renderScoreCardImages } from "../best-image.js";
 
 test("候補表示は達成率とランクの桁数に関係なく列がそろう", () => {
   const under100 = renderCandidate({
@@ -79,6 +79,19 @@ test("plate and level commands use their required inputs and 30-to-50 count rang
   const plateCount = plate?.options?.find((option) => option.name === "count");
   assert.equal(plateCount?.min_value, 1);
   assert.equal(plateCount?.max_value, 50);
+  assert.ok(plate?.options?.find((option) => option.name === "image"));
   assert.equal(level?.options?.find((option) => option.name === "level")?.required, true);
   assert.equal(level?.options?.find((option) => option.name === "kind")?.required, true);
+  assert.ok(level?.options?.find((option) => option.name === "image"));
+  assert.ok(command.options.find((option) => option.name === "newconstant")?.options?.find((option) => option.name === "image"));
+});
+
+test("new constant and progress cards retain the requested score details", () => {
+  const score = { title: "Card", difficulty: "MASTER", rating: 0, internalLevel: 14.4, achievements: 100.5, chartType: "dx" as const, comboStatus: "AP" as const, syncStatus: "FDX" as const };
+  assert.deepEqual(newConstantCards([score])[0], {
+    score, topLeft: "#1 Lv14.4", topRight: "DX MASTER", bottom: "100.5000%", accent: "#9a62db"
+  });
+  assert.deepEqual(progressCards([score], true)[0], {
+    score, topLeft: "#1 Lv14.4", topRight: "AP / FDX", bottom: "100.5000%", accent: "#9a62db"
+  });
 });

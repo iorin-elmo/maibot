@@ -3,7 +3,7 @@ import {
 } from "discord.js";
 import { achievementRank, bestCandidates, bestScores, dxScorePercent, dxStar, dxStarCandidates, type BestCandidate, type DxStarCandidate } from "./analysis.js";
 import { makeFreeBookmarklet, makePremiumBookmarkletSecure } from "./browser-sync.js";
-import { bestCards, candidateCards, dxScoreCards, dxStarCandidateCards, renderScoreCardImages } from "./best-image.js";
+import { bestCards, candidateCards, dxScoreCards, dxStarCandidateCards, newConstantCards, progressCards, renderScoreCardImages } from "./best-image.js";
 import type { MaimaiCatalog } from "./catalog.js";
 import type { BotDatabase } from "./database.js";
 import { isComboOrSyncKind, levelProgressKinds, plateByName, plateGoalDescription, progressKindSatisfied, type LevelProgressKind } from "./progress.js";
@@ -47,14 +47,17 @@ export const maimaiCommand = new SlashCommandBuilder()
   .addSubcommand((command) => command.setName("sync").setDescription("StandardコースのRatingページから同期します"))
   .addSubcommand((command) => command.setName("fsync").setDescription("無料コースのversion別スコアから同期します"))
   .addSubcommand((command) => command.setName("newconstant").setDescription("新曲譜面を定数が高い順に表示します")
-    .addIntegerOption(newConstantCountOption))
+    .addIntegerOption(newConstantCountOption)
+    .addBooleanOption(imageOption))
   .addSubcommand((command) => command.setName("plate").setDescription("プレート取得に足りない譜面を表示")
     .addStringOption(plateKindOption)
-    .addIntegerOption(newConstantCountOption))
+    .addIntegerOption(newConstantCountOption)
+    .addBooleanOption(imageOption))
   .addSubcommand((command) => command.setName("level").setDescription("指定レベルの未達成譜面を表示")
     .addStringOption(levelOption)
     .addStringOption(levelProgressKindOption)
-    .addIntegerOption(newConstantCountOption))
+    .addIntegerOption(newConstantCountOption)
+    .addBooleanOption(imageOption))
   .addSubcommand((command) => command.setName("best").setDescription("ベスト枠を表示します")
     .addStringOption(kindOption)
     .addBooleanOption(imageOption))
@@ -213,9 +216,9 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       .addFields(
         { name: "/maimai sync", value: "Standardコースの「でらっくすRating」ページから同期" },
         { name: "/maimai fsync", value: "無料コース向け。version別スコアからBest 50を計算して同期" },
-        { name: "/maimai newconstant [count]", value: "新曲（最新2バージョン）のDX/STD譜面を定数が高い順に表示。未プレイとStandardコース同期のBest枠外は-%（既定30件、最大50件）" },
-        { name: "/maimai plate <kind> [count]", value: "指定プレートに不足している譜面を定数が高い順に表示。kind は 熊神・彩将・丸舞舞など（既定30件、最大50件）" },
-        { name: "/maimai level <level> <kind> [count]", value: "指定レベルの未AP+/AP/SSS+/SSS/SS+/SS/S+/S/FC+/FC/FDXを達成率順に表示（既定30件、最大50件）" },
+        { name: "/maimai newconstant [count] [image]", value: "新曲（最新2バージョン）のDX/STD譜面を定数が高い順に表示。image でジャケット画像、既定30件・最大50件" },
+        { name: "/maimai plate <kind> [count] [image]", value: "指定プレートに不足している譜面を定数が高い順に表示。kind は 熊神・彩将・丸舞舞など。image でジャケット画像" },
+        { name: "/maimai level <level> <kind> [count] [image]", value: "指定レベルの未AP+/AP/SSS+/SSS/SS+/SS/S+/S/FC+/FC/FDXを達成率順に表示。image でジャケット画像" },
         { name: "/maimai best [kind] [image]", value: "PC向けの詳しいベスト枠表示。image を有効にするとジャケット付きカード画像" },
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
         { name: "/maimai image [kind]", value: "ベスト枠を画像で表示" },
@@ -260,6 +263,11 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       await interaction.editReply("新曲の譜面定数データがありません。");
       return;
     }
+    if (wantsImage) {
+      const imageScores = await enrichImageScores(catalog, scores);
+      await replyCardImages(interaction, playerName, "新曲譜面定数順", newConstantCards(imageScores), "maimai-newconstant");
+      return;
+    }
     const descriptions = splitLines(scores.map(renderNewConstantScore), 3_900).map(asCodeBlock);
     await interaction.editReply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
       .setColor(0xff5a9e)
@@ -287,6 +295,11 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       await interaction.editReply(`${plate.name} の条件をすべて満たしています！`);
       return;
     }
+    if (wantsImage) {
+      const imageScores = await enrichImageScores(catalog, scores);
+      await replyCardImages(interaction, playerName, `${plate.name}候補曲`, progressCards(imageScores, isComboOrSyncKind(plate.goal)), "maimai-plate");
+      return;
+    }
     const descriptions = splitLines(scores.map((score, index) => renderProgressScore(score, index, plate.goal)), 3_900).map(asCodeBlock);
     const plateSummary = `**${plate.label}の全譜面 ${plateGoalDescription(plate.goal)} に足りない譜面を、譜面定数が高い順に表示します。状態を反映するには \`/maimai fsync\` を再実行してください。**\n\n`;
     await interaction.editReply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
@@ -309,6 +322,11 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       .slice(0, count);
     if (!scores.length) {
       await interaction.editReply(`Lv.${level} の全譜面で ${kind} を達成しています！`);
+      return;
+    }
+    if (wantsImage) {
+      const imageScores = await enrichImageScores(catalog, scores);
+      await replyCardImages(interaction, playerName, `Lv.${level} 未${kind}一覧`, progressCards(imageScores, isComboOrSyncKind(kind)), "maimai-level");
       return;
     }
     const descriptions = splitLines(scores.map((score, index) => renderProgressScore(score, index, kind)), 3_900).map(asCodeBlock);

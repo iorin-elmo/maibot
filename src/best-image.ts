@@ -188,6 +188,28 @@ export function dxStarCandidateCards(candidates: DxStarCandidate[]): CardItem[] 
   }));
 }
 
+export function newConstantCards(scores: ScoreRecord[]): CardItem[] {
+  return scores.map((score, index) => ({
+    score,
+    topLeft: `#${index + 1} Lv${score.internalLevel?.toFixed(1) ?? "?"}`,
+    topRight: `${score.chartType === "standard" ? "STD" : "DX"} ${score.difficulty.toUpperCase()}`,
+    bottom: score.achievements === undefined ? "-%" : `${score.achievements.toFixed(4)}%`,
+    accent: difficultyAccent(score.difficulty)
+  }));
+}
+
+export function progressCards(scores: ScoreRecord[], showComboAndSync: boolean): CardItem[] {
+  return scores.map((score, index) => ({
+    score,
+    topLeft: `#${index + 1} Lv${score.internalLevel?.toFixed(1) ?? "?"}`,
+    topRight: showComboAndSync
+      ? `${score.comboStatus ?? "-"} / ${score.syncStatus ?? "-"}`
+      : score.achievements === undefined ? "--" : score.achievements >= 100.5 ? "SSS+" : score.achievements >= 100 ? "SSS" : score.achievements >= 99.5 ? "SS+" : score.achievements >= 99 ? "SS" : score.achievements >= 98 ? "S+" : score.achievements >= 97 ? "S" : "-",
+    bottom: score.achievements === undefined ? "-%" : `${score.achievements.toFixed(4)}%`,
+    accent: difficultyAccent(score.difficulty)
+  }));
+}
+
 // Kept for the existing /maimai image command. Its output now uses jacket cards.
 export async function renderBestImage(playerName: string, label: string, _summary: string, scores: ScoreRecord[], mixed: boolean): Promise<Buffer> {
   const images = await renderScoreCardImages(playerName, label, bestCards(scores, mixed));
