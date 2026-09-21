@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { createCanvas, GlobalFonts, loadImage, type SKRSContext2D } from "@napi-rs/canvas";
-import { dxScorePercent, dxStar, type BestCandidate, type DxStarCandidate } from "./analysis.js";
+import { achievementRank, dxScorePercent, dxStar, type BestCandidate, type DxStarCandidate } from "./analysis.js";
 import type { ScoreRecord } from "./types.js";
 import { truncateSongTitle } from "./text.js";
 
@@ -204,7 +204,7 @@ export function progressCards(scores: ScoreRecord[], showComboAndSync: boolean):
     topLeft: `#${index + 1} Lv${score.internalLevel?.toFixed(1) ?? "?"}`,
     topRight: showComboAndSync
       ? `${score.comboStatus ?? "-"} / ${score.syncStatus ?? "-"}`
-      : score.achievements === undefined ? "--" : score.achievements >= 100.5 ? "SSS+" : score.achievements >= 100 ? "SSS" : score.achievements >= 99.5 ? "SS+" : score.achievements >= 99 ? "SS" : score.achievements >= 98 ? "S+" : score.achievements >= 97 ? "S" : "-",
+      : score.achievements === undefined ? "--" : achievementRank(score.achievements),
     bottom: score.achievements === undefined ? "-%" : `${score.achievements.toFixed(4)}%`,
     accent: difficultyAccent(score.difficulty)
   }));

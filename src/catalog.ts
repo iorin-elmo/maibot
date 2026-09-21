@@ -44,6 +44,10 @@ function normalize(value: string): string {
   return value.normalize("NFKC").replace(/[\s　]+/g, "").toLowerCase();
 }
 
+function normalizeDifficulty(value: string): string {
+  return normalize(value).replace(/:/g, "");
+}
+
 function versionId(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -68,15 +72,15 @@ export class MaimaiCatalog {
   constructor(private readonly sourceUrl: string) {}
 
   private key(title: string, type: string, difficulty: string, level: string | undefined): string {
-    return [normalize(title), type, difficulty.toLowerCase(), normalize(level ?? "")].join("\u0000");
+    return [normalize(title), type, normalizeDifficulty(difficulty), normalize(level ?? "")].join("\u0000");
   }
 
   private legacyKey(title: string, difficulty: string, level: string | undefined): string {
-    return [normalize(title), difficulty.toLowerCase(), normalize(level ?? "")].join("\u0000");
+    return [normalize(title), normalizeDifficulty(difficulty), normalize(level ?? "")].join("\u0000");
   }
 
   private legacyTitleDifficultyKey(title: string, difficulty: string): string {
-    return [normalize(title), difficulty.toLowerCase()].join("\u0000");
+    return [normalize(title), normalizeDifficulty(difficulty)].join("\u0000");
   }
 
   private async load(needsVersionMetadata: boolean): Promise<LoadedCatalog> {
@@ -255,7 +259,7 @@ export class MaimaiCatalog {
     return this.scoreCharts(charts.filter((chart) => chart.version !== undefined
       && targetVersions.has(chart.version)
       && !excluded.has(chart.title)
-      && chart.difficulty.replace(/[:\s]/g, "").toLowerCase() !== "remaster"
+      && normalizeDifficulty(chart.difficulty) !== "remaster"
       && (!standardOnly || chart.chartType === "standard")), scores);
   }
 }

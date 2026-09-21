@@ -96,4 +96,5 @@ test("new constant and progress cards retain the requested score details", () =>
   assert.deepEqual(progressCards([score], true)[0], {
     score, topLeft: "#1 Lv14.4", topRight: "AP / FDX", bottom: "100.5000%", accent: "#9a62db"
   });
+  assert.equal(progressCards([{ ...score, achievements: 96 }], false)[0].topRight, "AAA");
 });
