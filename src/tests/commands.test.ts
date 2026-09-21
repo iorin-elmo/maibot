@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { renderCandidate, renderDxScore, renderDxStarCandidate, renderNewConstantScore } from "../commands.js";
+import { maimaiCommand, renderCandidate, renderDxScore, renderDxStarCandidate, renderNewConstantScore } from "../commands.js";
 import { difficultyAccent, renderScoreCardImages } from "../best-image.js";
+
+test("maimai command is available in bot DMs", () => {
+  const command = maimaiCommand.toJSON() as { contexts?: number[] };
+  assert.deepEqual(command.contexts, [0, 1]);
+});
 
 test("候補表示は達成率とランクの桁数に関係なく列がそろう", () => {
   const under100 = renderCandidate({

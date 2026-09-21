@@ -1,5 +1,5 @@
 import {
-  AttachmentBuilder, EmbedBuilder, SlashCommandBuilder, type ChatInputCommandInteraction, type SlashCommandIntegerOption, type SlashCommandStringOption
+  AttachmentBuilder, EmbedBuilder, InteractionContextType, SlashCommandBuilder, type ChatInputCommandInteraction, type SlashCommandIntegerOption, type SlashCommandStringOption
 } from "discord.js";
 import { achievementRank, bestCandidates, bestScores, dxScorePercent, dxStar, dxStarCandidates, type BestCandidate, type DxStarCandidate } from "./analysis.js";
 import { makeFreeBookmarklet, makePremiumBookmarkletSecure } from "./browser-sync.js";
@@ -34,6 +34,7 @@ const imageOption = (option: import("discord.js").SlashCommandBooleanOption) =>
 export const maimaiCommand = new SlashCommandBuilder()
   .setName("maimai")
   .setDescription("maimaiのベスト枠を表示します")
+  .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM)
   .addSubcommand((command) => command.setName("help").setDescription("使い方を表示します"))
   .addSubcommand((command) => command.setName("sync").setDescription("StandardコースのRatingページから同期します"))
   .addSubcommand((command) => command.setName("fsync").setDescription("無料コースのversion別スコアから同期します"))
