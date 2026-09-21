@@ -2,7 +2,7 @@ import { singleChartRating } from "./analysis.js";
 import type { ScoreRecord } from "./types.js";
 
 interface CatalogSheet {
-  type: "dx" | "std";
+  type: string;
   difficulty: string;
   level: string;
   internalLevelValue: number;
@@ -22,8 +22,20 @@ interface CatalogEntry {
   jacketImageName?: string;
   version?: string;
 }
+interface CatalogChart {
+  key: string;
+  title: string;
+  difficulty: string;
+  level: string;
+  chartType: "dx" | "standard";
+  internalLevel: number;
+  dxScoreMax?: number;
+  jacketImageName?: string;
+  version?: string;
+}
 interface LoadedCatalog {
   index: Map<string, CatalogEntry>;
+  charts: CatalogChart[];
   newestVersions: Set<string>;
   knownVersions: Set<string>;
 }
@@ -47,6 +59,7 @@ function maximumDxScore(noteCounts: CatalogSheet["noteCounts"]): number | undefi
 export class MaimaiCatalog {
   private loadPromise: Promise<LoadedCatalog> | undefined;
   private cachedIndex: Map<string, CatalogEntry> | undefined;
+  private cachedCharts: CatalogChart[] | undefined;
   private cachedNewestVersions: Set<string> | undefined;
   private cachedKnownVersions: Set<string> | undefined;
   private loadedAt = 0;
@@ -60,10 +73,12 @@ export class MaimaiCatalog {
 
   private async load(needsVersionMetadata: boolean): Promise<LoadedCatalog> {
     const cachedIndex = this.cachedIndex;
-    const cacheIsFresh = cachedIndex && Date.now() - this.loadedAt < this.cacheDurationMs;
+    const cachedCharts = this.cachedCharts;
+    const cacheIsFresh = cachedIndex && cachedCharts && Date.now() - this.loadedAt < this.cacheDurationMs;
     if (cacheIsFresh && (!needsVersionMetadata || this.cachedNewestVersions)) {
       return {
         index: cachedIndex,
+        charts: cachedCharts,
         newestVersions: this.cachedNewestVersions ?? new Set<string>(),
         knownVersions: this.cachedKnownVersions ?? new Set<string>()
       };
@@ -74,15 +89,25 @@ export class MaimaiCatalog {
       const document = await response.json() as CatalogDocument;
       if (!Array.isArray(document.songs)) throw new Error("譜面定数データの形式が不正です。");
       const index = new Map<string, CatalogEntry>();
+      const charts: CatalogChart[] = [];
       for (const song of document.songs) for (const sheet of song.sheets ?? []) {
+        // UTAGE charts (including two-player variants) are not part of the
+        // new-song rating frame and must not appear in its constant ranking.
+        if (sheet.type !== "dx" && sheet.type !== "std") continue;
         if (!Number.isFinite(sheet.internalLevelValue)) throw new Error(`譜面定数が不正です: ${song.title}`);
         const type = sheet.type === "std" ? "standard" : "dx";
-        index.set(this.key(song.title, type, sheet.difficulty, sheet.level), {
+        const key = this.key(song.title, type, sheet.difficulty, sheet.level);
+        const version = versionId(sheet.version) ?? versionId(song.version);
+        const jacketImageName = typeof song.imageName === "string" && song.imageName ? song.imageName : undefined;
+        const dxScoreMax = maximumDxScore(sheet.noteCounts);
+        index.set(key, {
           internalLevel: sheet.internalLevelValue,
-          dxScoreMax: maximumDxScore(sheet.noteCounts),
-          jacketImageName: typeof song.imageName === "string" && song.imageName ? song.imageName : undefined,
-          version: versionId(sheet.version) ?? versionId(song.version)
+          dxScoreMax,
+          jacketImageName,
+          version
         });
+        charts.push({ key, title: song.title, difficulty: sheet.difficulty, level: sheet.level, chartType: type,
+          internalLevel: sheet.internalLevelValue, dxScoreMax, jacketImageName, version });
       }
       const allVersionIds = Array.isArray(document.versions)
         ? document.versions.map((version) => versionId(version?.version))
@@ -93,12 +118,13 @@ export class MaimaiCatalog {
         && new Set(latestVersionIds).size === 2;
       const newestVersions = hasTwoDistinctVersions ? new Set(latestVersionIds) : new Set<string>();
       const knownVersions = new Set(allVersionIds.filter((version): version is string => version !== undefined));
-      const loaded = { index, newestVersions, knownVersions };
+      const loaded = { index, charts, newestVersions, knownVersions };
       // Standard sync only needs the song index, so cache it independently.
       // Free sync must retry malformed version metadata rather than treating
       // an invalid latest-two split as valid for the full TTL.
       this.loadedAt = Date.now();
       this.cachedIndex = index;
+      this.cachedCharts = charts;
       this.cachedNewestVersions = hasTwoDistinctVersions ? newestVersions : undefined;
       this.cachedKnownVersions = hasTwoDistinctVersions ? knownVersions : undefined;
       return loaded;
@@ -134,5 +160,39 @@ export class MaimaiCatalog {
         rating: singleChartRating(entry.internalLevel, score.achievements)
       };
     });
+  }
+
+  /**
+   * Lists every chart in the latest two versions by chart constant. A missing
+   * player score is left undefined, so unplayed charts remain in
+   * the ranking.
+   */
+  async newestChartConstantRanking(scores: ScoreRecord[]): Promise<ScoreRecord[]> {
+    const { charts, newestVersions } = await this.load(true);
+    if (newestVersions.size !== 2) throw new Error("新曲のバージョン情報を照合できませんでした。");
+    const scoresByChart = new Map(scores.flatMap((score) => score.chartType
+      ? [[this.key(score.title, score.chartType, score.difficulty, score.level), score] as const]
+      : []));
+    return charts
+      .filter((chart) => chart.version !== undefined && newestVersions.has(chart.version))
+      .map((chart) => {
+        const score = scoresByChart.get(chart.key);
+        return {
+          title: chart.title,
+          difficulty: chart.difficulty,
+          level: chart.level,
+          achievements: score?.achievements,
+          dxScore: score?.dxScore,
+          dxScoreMax: chart.dxScoreMax ?? score?.dxScoreMax,
+          rating: score?.rating ?? 0,
+          chartKind: "new" as const,
+          chartType: chart.chartType,
+          internalLevel: chart.internalLevel,
+          jacketImageName: chart.jacketImageName
+        };
+      })
+      .sort((a, b) => (b.internalLevel ?? 0) - (a.internalLevel ?? 0)
+        || a.title.localeCompare(b.title, "ja")
+        || a.difficulty.localeCompare(b.difficulty));
   }
 }

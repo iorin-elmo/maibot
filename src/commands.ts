@@ -17,7 +17,7 @@ const kindOption = (option: SlashCommandStringOption) =>
   );
 
 const countOption = (option: SlashCommandIntegerOption) =>
-  option.setName("count").setDescription("表示件数（既定: 10、最大: 30）").setMinValue(1).setMaxValue(30);
+  option.setName("count").setDescription("表示件数（既定: 10、最大: 50）").setMinValue(1).setMaxValue(50);
 
 const levelOption = (option: SlashCommandStringOption) =>
   option.setName("level").setDescription("対象レベル（例: 14、14+）").setRequired(true);
@@ -34,6 +34,8 @@ export const maimaiCommand = new SlashCommandBuilder()
   .addSubcommand((command) => command.setName("help").setDescription("使い方を表示します"))
   .addSubcommand((command) => command.setName("sync").setDescription("StandardコースのRatingページから同期します"))
   .addSubcommand((command) => command.setName("fsync").setDescription("無料コースのversion別スコアから同期します"))
+  .addSubcommand((command) => command.setName("newconstant").setDescription("新曲譜面を定数が高い順に表示します")
+    .addIntegerOption(countOption))
   .addSubcommand((command) => command.setName("best").setDescription("ベスト枠を表示します")
     .addStringOption(kindOption)
     .addBooleanOption(imageOption))
@@ -78,6 +80,12 @@ function renderMobileScore(score: ScoreRecord, index: number): string {
   const category = score.chartKind === "new" ? "新" : "旧";
   const rating = (typeof score.internalLevel === "number" ? String(score.rating) : "?").padStart(3);
   return `${category}#${rank} [${rating}] ${truncateSongTitle(score.title)}`;
+}
+
+export function renderNewConstantScore(score: ScoreRecord, index: number): string {
+  const constant = `[${score.internalLevel?.toFixed(1) ?? "?"}]`;
+  const achievement = score.achievements === undefined ? "-%" : `${score.achievements.toFixed(4)}%`;
+  return `#${String(index + 1).padStart(2)} ${constant} ${achievement.padStart(9)} / ${truncateSongTitle(score.title)}`;
 }
 
 function splitLines(lines: string[], maxLength = 3_800): string[] {
@@ -172,6 +180,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       .addFields(
         { name: "/maimai sync", value: "Standardコースの「でらっくすRating」ページから同期" },
         { name: "/maimai fsync", value: "無料コース向け。version別スコアからBest 50を計算して同期" },
+        { name: "/maimai newconstant [count]", value: "新曲（最新2バージョン）の全譜面を定数が高い順に表示。未プレイは-%（既定30件、最大50件）" },
         { name: "/maimai best [kind] [image]", value: "PC向けの詳しいベスト枠表示。image を有効にするとジャケット付きカード画像" },
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
         { name: "/maimai image [kind]", value: "ベスト枠を画像で表示" },
@@ -207,6 +216,22 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   const kind = interaction.options.getString("kind") ?? "all";
   const allScores = db.getScores(interaction.user.id);
   const playerName = account.playerName ?? "maimai";
+  if (subcommand === "newconstant") {
+    if (!catalog) throw new Error("譜面定数データを利用できません。");
+    const count = interaction.options.getInteger("count") ?? 30;
+    await interaction.deferReply();
+    const scores = (await catalog.newestChartConstantRanking(allScores)).slice(0, count);
+    if (!scores.length) {
+      await interaction.editReply("新曲の譜面定数データがありません。");
+      return;
+    }
+    const descriptions = splitLines(scores.map(renderNewConstantScore), 3_900).map(asCodeBlock);
+    await interaction.editReply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
+      .setColor(0xff5a9e)
+      .setTitle(`${playerName} の新曲譜面定数順${index ? "（続き）" : ""}`)
+      .setDescription(`${index ? "" : "**新曲（最新2バージョン）の譜面定数が高い順です。未プレイは -% と表示します。**\n\n"}${description}`)) });
+    return;
+  }
   if (subcommand === "dxscore" || subcommand === "dxstar") {
     const level = interaction.options.getString("level", true).trim();
     const count = interaction.options.getInteger("count") ?? 10;

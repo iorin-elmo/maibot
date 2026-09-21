@@ -31,6 +31,8 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
       versions: [{ version: "old" }, { version: "new-1" }, { version: "new-2" }],
       songs: [
         { title: "New", version: "new-1", sheets: [{ type: "dx", difficulty: "MASTER", level: "14", internalLevelValue: 14.2 }] },
+        { title: "Unplayed", version: "new-2", sheets: [{ type: "dx", difficulty: "EXPERT", level: "14", internalLevelValue: 14.1 }] },
+        { title: "UTAGE", version: "new-2", sheets: [{ type: "utage", difficulty: "宴", level: "?", internalLevelValue: 15 }] },
         { title: "Old", version: "old", sheets: [{ type: "dx", difficulty: "EXPERT", level: "13", internalLevelValue: 13.4 }] }
       ]
     };
@@ -43,6 +45,13 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
     assert.equal(newScore.rating, singleChartRating(14.2, 100));
     assert.equal(oldScore.rating, singleChartRating(13.4, 99.5));
     assert.equal(fetchCount, 2);
+
+    const newChartRanking = await catalog.newestChartConstantRanking([{
+      title: "New", difficulty: "MASTER", level: "14", achievements: 98, rating: 0, chartKind: "new", chartType: "dx"
+    }]);
+    assert.deepEqual(newChartRanking.map((score) => score.title), ["New", "Unplayed"]);
+    assert.deepEqual(newChartRanking.map((score) => score.achievements), [98, undefined]);
+    assert.deepEqual(newChartRanking.map((score) => score.internalLevel), [14.2, 14.1]);
 
     document = {
       versions: [{ version: "old" }, { version: "new-1" }, { version: "new-2" }],
