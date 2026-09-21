@@ -248,7 +248,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         { name: "/maimai dxscore <level> [count] [image]", value: "指定レベルのDXスコア%順。現在DXスコア / 譜面ごとの最大DXスコアを表示（既定10件、最大50件）" },
         { name: "/maimai dxstar <level> <star> [count] [image]", value: "指定レベルで、次の指定星まであと何DXスコアかが少ない順。star は1〜6（既定10件、最大50件）" },
         { name: "kind", value: "新曲 / 旧曲 / 全曲。省略時は全曲。" },
-        { name: "詳細", value: "詳細は [https://iorin-elmo.github.io/maibot](https://iorin-elmo.github.io/maibot) をご覧ください。" }
+        { name: "詳細", value: "詳細は https://iorin-elmo.github.io/maibot をご覧ください。" }
       );
     await interaction.reply({ embeds: [embed], ephemeral: true });
     return;
