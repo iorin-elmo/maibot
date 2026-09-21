@@ -15,14 +15,16 @@ async function registerCommands(): Promise<void> {
   const applicationId = client.user?.id;
   if (!applicationId) throw new Error("Discord application IDを取得できませんでした。");
   const body = [maimaiCommand.toJSON()];
+  // Global commands are required for Bot DMs. Keep the optional guild registration
+  // too, so configured development guilds continue to receive instant updates.
+  await rest.put(Routes.applicationCommands(applicationId), { body });
   if (config.guildId) await rest.put(Routes.applicationGuildCommands(applicationId, config.guildId), { body });
-  else await rest.put(Routes.applicationCommands(applicationId), { body });
 }
 
 client.once(Events.ClientReady, async (readyClient) => {
   try {
     await registerCommands();
-    console.log(`Ready: ${readyClient.user.tag} (${config.guildId ? "guild" : "global"} commands registered)`);
+    console.log(`Ready: ${readyClient.user.tag} (global${config.guildId ? " and guild" : ""} commands registered)`);
   } catch (error) {
     console.error("Command registration failed", error);
   }

@@ -3,6 +3,11 @@ import test from "node:test";
 import { maimaiCommand, renderCandidate, renderDxScore, renderDxStarCandidate, renderNewConstantScore, renderProgressScore } from "../commands.js";
 import { difficultyAccent, newConstantCards, progressCards, renderScoreCardImages } from "../best-image.js";
 
+test("maimai command is available in bot DMs", () => {
+  const command = maimaiCommand.toJSON() as { contexts?: number[] };
+  assert.deepEqual(command.contexts, [0, 1]);
+});
+
 test("候補表示は達成率とランクの桁数に関係なく列がそろう", () => {
   const under100 = renderCandidate({
     score: { title: "Under", difficulty: "MASTER", rating: 290, chartKind: "new", achievements: 99.5, internalLevel: 14.4 },
