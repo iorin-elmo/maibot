@@ -115,7 +115,7 @@ function makeFreeSyncScriptWithHeader(baseUrl: string, token: string): string {
       'achievements=number(q(".music_score_block.w_120")?.textContent||q(".music_score_block")?.textContent),dxScore=number(q(".music_dx_score_block")?.textContent||q(".dx_score_block")?.textContent)',
       'blocks=Array.from(row.querySelectorAll?.(".music_score_block")||[]),achievements=number(blocks.find(b=>String(b.textContent||"").includes("%"))?.textContent||q(".music_score_block.w_120")?.textContent||q(".music_score_block")?.textContent),dxScore=number(q(".music_dx_score_block")?.textContent||q(".dx_score_block")?.textContent||blocks.find(b=>!String(b.textContent||"").includes("%"))?.textContent)'
     )
-    .replace('},status=', '},integer=value=>{const match=String(value??"").match(/\\d[\\d,]*/);if(!match)return undefined;const parsed=Number(match[0].replace(/,/g,""));return Number.isInteger(parsed)?parsed:undefined},status=')
+    .replace(',status=', ',integer=value=>{const match=String(value??"").match(/\\d[\\d,]*/);if(!match)return undefined;const parsed=Number(match[0].replace(/,/g,""));return Number.isInteger(parsed)?parsed:undefined},status=')
     .replace('dxScore=number(', 'dxScore=integer(')
     .replace('headers:{"Content-Type":"application/json"}', 'headers:{"Content-Type":"application/json","X-Import-Token":token}')
     .replace('JSON.stringify({token,playerName', 'JSON.stringify({playerName')

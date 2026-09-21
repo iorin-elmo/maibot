@@ -233,6 +233,7 @@ test("生成した無料同期スクリプトは全難易度を収集し、異�
     const scriptResponse = await getWithRetry(`${origin}/v1/free-bookmarklet`, token);
     assert.equal(scriptResponse.status, 200);
     const script = await scriptResponse.text();
+    assert.match(script, /integer=value/);
     const requestedDifficulties: number[] = [];
     const sentPayloads: Array<{ scores: Array<{ title: string; achievements: number; dxScore?: number; chartType: string }> }> = [];
     let mode: "valid" | "invalid" = "valid";
