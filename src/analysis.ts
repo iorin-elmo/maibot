@@ -51,36 +51,46 @@ export interface BestCandidate {
   nextAchievement: number;
   nextRank: string;
   ratingAtNextRank: number;
+  ratingGain: number;
   achievementGap: number;
 }
 
 /**
- * Finds charts outside a best frame which would enter it at their next
- * achievement-rank threshold. Nearer thresholds are deliberately prioritised
- * over the rating the chart would contribute once it enters the frame.
+ * Finds charts which would improve the Best total at a higher achievement
+ * rank. Charts outside the frame are compared with the lowest-rated chart in
+ * the current frame, because that is the chart they would displace. Each
+ * chart uses its nearest higher rank that improves the total, so charts which
+ * need more than one rank increase can also be returned.
  */
 export function bestCandidates(scores: ScoreRecord[], kind: "new" | "old", limit = 10): BestCandidate[] {
   const frameSize = kind === "new" ? 15 : 35;
   const currentBest = bestScores(scores, kind, frameSize);
   const bestSet = new Set(currentBest);
+  const lowestBestRating = currentBest.length === frameSize
+    ? Math.min(...currentBest.map((score) => score.rating))
+    : undefined;
 
   return scores.flatMap((score): BestCandidate[] => {
-    if (bestSet.has(score) || chartKindOf(score) !== kind
+    if (chartKindOf(score) !== kind
       || typeof score.achievements !== "number" || typeof score.internalLevel !== "number") return [];
-    const nextAchievement = nextRankThresholds.find((threshold) => threshold > score.achievements!);
-    if (nextAchievement === undefined) return [];
-    const ratingAtNextRank = singleChartRating(score.internalLevel, nextAchievement);
-    // officialRank describes the current official frame. It must not determine
-    // the hypothetical result after this chart has improved.
-    const upgraded = { ...score, achievements: nextAchievement, rating: ratingAtNextRank, officialRank: undefined };
-    const hypotheticalFrame = currentBest.map((frameScore) => ({ ...frameScore, officialRank: undefined }));
-    if (!bestScores([...hypotheticalFrame, upgraded], kind, frameSize).includes(upgraded)) return [];
+    const alreadyInBest = bestSet.has(score);
+    const upgrade = nextRankThresholds
+      .filter((threshold) => threshold > score.achievements!)
+      .map((achievement) => ({ achievement, rating: singleChartRating(score.internalLevel!, achievement) }))
+      .find(({ rating }) => alreadyInBest
+        ? rating > score.rating
+        : lowestBestRating === undefined || rating > lowestBestRating);
+    if (!upgrade) return [];
+    const ratingGain = alreadyInBest
+      ? upgrade.rating - score.rating
+      : lowestBestRating === undefined ? upgrade.rating : upgrade.rating - lowestBestRating;
     return [{
       score,
-      nextAchievement,
-      nextRank: achievementRank(nextAchievement),
-      ratingAtNextRank,
-      achievementGap: nextAchievement - score.achievements
+      nextAchievement: upgrade.achievement,
+      nextRank: achievementRank(upgrade.achievement),
+      ratingAtNextRank: upgrade.rating,
+      ratingGain,
+      achievementGap: upgrade.achievement - score.achievements
     }];
   }).sort((a, b) => a.achievementGap - b.achievementGap
     || b.ratingAtNextRank - a.ratingAtNextRank

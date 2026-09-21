@@ -47,7 +47,9 @@ export function renderBestImage(playerName: string, label: string, summary: stri
     context.fillText(data.rating, 220, y);
     context.fillText("/", 285, y);
     context.fillText(achievementRank(score.achievements), 324, y);
-    context.fillText(data.achievement, 430, y);
+    context.textAlign = "right";
+    context.fillText(data.achievement, 590, y);
+    context.textAlign = "left";
     context.fillText("/", 610, y);
     context.fillText(truncateSongTitle(score.title), 645, y);
   }

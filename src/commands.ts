@@ -30,7 +30,7 @@ export const maimaiCommand = new SlashCommandBuilder()
     .addStringOption(kindOption))
   .addSubcommand((command) => command.setName("image").setDescription("ベスト枠を画像で表示します")
     .addStringOption(kindOption))
-  .addSubcommand((command) => command.setName("candidate").setDescription("次ランク到達でBest枠に入る候補譜面を表示")
+  .addSubcommand((command) => command.setName("candidate").setDescription("次ランク到達でBestレートが伸びる候補譜面を表示")
     .addStringOption(kindOption)
     .addIntegerOption(countOption));
 
@@ -85,26 +85,27 @@ function bestEmbeds(playerName: string, label: string, summary: string, scores: 
       .setDescription(`${index ? "" : `**${summary}**\n\n`}${asCodeBlock(description)}`));
 }
 
-function renderCandidate(candidate: BestCandidate, index: number): string {
+export function renderCandidate(candidate: BestCandidate, index: number): string {
   const score = candidate.score;
-  const constant = `[${score.internalLevel?.toFixed(1) ?? "?"}]`;
-  return `**#${String(index + 1).padStart(2, "0")}** +${candidate.achievementGap.toFixed(4)}% → ${candidate.nextRank} ${candidate.nextAchievement.toFixed(4)}% / ${constant} ${candidate.ratingAtNextRank} / ${truncateSongTitle(score.title)}`;
+  const level = `[${score.internalLevel?.toFixed(1) ?? "?"}]`;
+  const currentAchievement = (typeof score.achievements === "number" ? `${score.achievements.toFixed(4)}%` : "-").padStart(9);
+  const currentScore = `#${String(index + 1).padStart(2, "0")} ${level} ${currentAchievement}`;
+  const nextRank = padDisplayEnd(candidate.nextRank, 4);
+  const ratingGain = `(+${String(candidate.ratingGain).padStart(2)})`;
+  return `${currentScore} → ${nextRank} ${ratingGain} / ${truncateSongTitle(score.title)}`;
 }
 
 function candidateEmbeds(playerName: string, kind: "new" | "old", candidates: BestCandidate[], hasOutsideCharts: boolean): EmbedBuilder[] {
   const label = kind === "new" ? "新曲枠の候補" : "旧曲枠の候補";
-  if (!hasOutsideCharts) return [new EmbedBuilder()
-    .setColor(0xff5a9e)
-    .setTitle(`${playerName} の${label}`)
-    .setDescription("候補を算出するにはBest枠外の譜面も必要です。`/maimai fsync` で全譜面を同期してください。")];
+  const syncNote = hasOutsideCharts ? "" : "Best枠外の候補を含めるには `/maimai fsync` が必要です。\n";
   if (!candidates.length) return [new EmbedBuilder()
     .setColor(0xff5a9e)
     .setTitle(`${playerName} の${label}`)
-    .setDescription("次のランク到達でBest枠に入る候補はありません。")];
+    .setDescription(`${syncNote}\n上位ランク到達でレートが伸びる候補はありません。`)];
   return splitLines(candidates.map(renderCandidate), 4_000).map((description, index) => new EmbedBuilder()
     .setColor(0xff5a9e)
     .setTitle(`${playerName} の${label}${index ? "（続き）" : ""}`)
-    .setDescription(`${index ? "" : "次ランクまでの差が小さい順です。同差なら枠入り時の単曲レートが高い順です。\n\n"}${description}`));
+    .setDescription(`${index ? "" : `${syncNote}必要達成率差が小さい順です。「(+値)」は、Bestレートが伸びる最初の上位ランクまで上げた場合の増分です。\n\n`}${asCodeBlock(description)}`));
 }
 
 export async function handleMaimai(interaction: ChatInputCommandInteraction, db: BotDatabase, importBaseUrl: string): Promise<void> {
@@ -120,7 +121,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         { name: "/maimai best [kind]", value: "PC向けの詳しいベスト枠表示" },
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
         { name: "/maimai image [kind]", value: "ベスト枠を画像で表示" },
-        { name: "/maimai candidate [kind] [count]", value: "次ランク到達でBest枠に入る候補。事前に /maimai fsync が必要（既定10件、最大30件）" },
+        { name: "/maimai candidate [kind] [count]", value: "次ランク到達でBestレートが伸びる候補。枠外候補の算出には /maimai fsync が必要（既定10件、最大30件）" },
         { name: "kind", value: "新曲 / 旧曲 / 全曲。省略時は全曲。" }
       );
     await interaction.reply({ embeds: [embed], ephemeral: true });
