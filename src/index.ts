@@ -1,7 +1,7 @@
 import { Client, Events, GatewayIntentBits, REST, Routes, type ChatInputCommandInteraction } from "discord.js";
 import { config } from "./config.js";
 import { BotDatabase } from "./database.js";
-import { handleMaimai, maimaiCommand } from "./commands.js";
+import { handleMaimai, handleMaimaiAutocomplete, maimaiCommand } from "./commands.js";
 import { startBrowserSyncServer } from "./browser-sync.js";
 import { MaimaiCatalog } from "./catalog.js";
 
@@ -29,6 +29,14 @@ client.once(Events.ClientReady, async (readyClient) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isAutocomplete()) {
+    try {
+      await handleMaimaiAutocomplete(interaction);
+    } catch (error) {
+      console.error("Autocomplete failed", error);
+    }
+    return;
+  }
   if (!interaction.isChatInputCommand() || interaction.commandName !== "maimai") return;
   try {
     await handleMaimai(interaction as ChatInputCommandInteraction, db, config.importBaseUrl, catalog);

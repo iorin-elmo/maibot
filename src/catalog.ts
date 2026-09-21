@@ -44,6 +44,10 @@ function normalize(value: string): string {
   return value.normalize("NFKC").replace(/[\s　]+/g, "").toLowerCase();
 }
 
+function normalizeDifficulty(value: string): string {
+  return normalize(value).replace(/:/g, "");
+}
+
 function versionId(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -68,15 +72,15 @@ export class MaimaiCatalog {
   constructor(private readonly sourceUrl: string) {}
 
   private key(title: string, type: string, difficulty: string, level: string | undefined): string {
-    return [normalize(title), type, difficulty.toLowerCase(), normalize(level ?? "")].join("\u0000");
+    return [normalize(title), type, normalizeDifficulty(difficulty), normalize(level ?? "")].join("\u0000");
   }
 
   private legacyKey(title: string, difficulty: string, level: string | undefined): string {
-    return [normalize(title), difficulty.toLowerCase(), normalize(level ?? "")].join("\u0000");
+    return [normalize(title), normalizeDifficulty(difficulty), normalize(level ?? "")].join("\u0000");
   }
 
   private legacyTitleDifficultyKey(title: string, difficulty: string): string {
-    return [normalize(title), difficulty.toLowerCase()].join("\u0000");
+    return [normalize(title), normalizeDifficulty(difficulty)].join("\u0000");
   }
 
   private async load(needsVersionMetadata: boolean): Promise<LoadedCatalog> {
@@ -170,18 +174,10 @@ export class MaimaiCatalog {
     });
   }
 
-  /**
-   * Lists every chart in the latest two versions by chart constant. A missing
-   * player score is left undefined, so unplayed charts remain in
-   * the ranking.
-   */
-  async newestChartConstantRanking(scores: ScoreRecord[]): Promise<ScoreRecord[]> {
-    const { charts, newestVersions } = await this.load(true);
-    if (newestVersions.size !== 2) throw new Error("新曲のバージョン情報を照合できませんでした。");
+  private scoreCharts(charts: CatalogChart[], scores: ScoreRecord[]): ScoreRecord[] {
     const scoresByChart = new Map(scores.flatMap((score) => score.chartType && normalize(score.level ?? "")
       ? [[this.key(score.title, score.chartType, score.difficulty, score.level), score] as const]
       : []));
-    const newCharts = charts.filter((chart) => chart.version !== undefined && newestVersions.has(chart.version));
     const levelLessTypedScores = new Map<string, ScoreRecord | null>();
     const legacyScores = new Map<string, ScoreRecord | null>();
     const levelLessLegacyScores = new Map<string, ScoreRecord | null>();
@@ -203,7 +199,7 @@ export class MaimaiCatalog {
     const chartCountByLevelLessTypedKey = new Map<string, number>();
     const chartCountByLegacyKey = new Map<string, number>();
     const chartCountByLegacyTitleDifficultyKey = new Map<string, number>();
-    for (const chart of newCharts) {
+    for (const chart of charts) {
       const levelLessTypedKey = this.key(chart.title, chart.chartType, chart.difficulty, undefined);
       chartCountByLevelLessTypedKey.set(levelLessTypedKey, (chartCountByLevelLessTypedKey.get(levelLessTypedKey) ?? 0) + 1);
       const key = this.legacyKey(chart.title, chart.difficulty, chart.level);
@@ -211,7 +207,7 @@ export class MaimaiCatalog {
       const titleDifficultyKey = this.legacyTitleDifficultyKey(chart.title, chart.difficulty);
       chartCountByLegacyTitleDifficultyKey.set(titleDifficultyKey, (chartCountByLegacyTitleDifficultyKey.get(titleDifficultyKey) ?? 0) + 1);
     }
-    return newCharts
+    return charts
       .map((chart) => {
         const levelLessTypedKey = this.key(chart.title, chart.chartType, chart.difficulty, undefined);
         const legacyKey = this.legacyKey(chart.title, chart.difficulty, chart.level);
@@ -227,15 +223,43 @@ export class MaimaiCatalog {
           achievements: score?.achievements,
           dxScore: score?.dxScore,
           dxScoreMax: chart.dxScoreMax ?? score?.dxScoreMax,
+          comboStatus: score?.comboStatus,
+          syncStatus: score?.syncStatus,
           rating: score?.rating ?? 0,
           chartKind: "new" as const,
           chartType: chart.chartType,
           internalLevel: chart.internalLevel,
           jacketImageName: chart.jacketImageName
         };
-      })
+      });
+  }
+
+  /** Lists every chart in the latest two versions by chart constant. */
+  async newestChartConstantRanking(scores: ScoreRecord[]): Promise<ScoreRecord[]> {
+    const { charts, newestVersions } = await this.load(true);
+    if (newestVersions.size !== 2) throw new Error("新曲のバージョン情報を照合できませんでした。");
+    return this.scoreCharts(charts.filter((chart) => chart.version !== undefined && newestVersions.has(chart.version)), scores)
       .sort((a, b) => (b.internalLevel ?? 0) - (a.internalLevel ?? 0)
         || a.title.localeCompare(b.title, "ja")
         || a.difficulty.localeCompare(b.difficulty));
+  }
+
+  /** Lists every DX/STD chart at a displayed level, including unplayed charts. */
+  async levelProgressRanking(level: string, scores: ScoreRecord[]): Promise<ScoreRecord[]> {
+    const { charts } = await this.load(false);
+    return this.scoreCharts(charts.filter((chart) => chart.level === level), scores);
+  }
+
+  /** Lists the BASIC through MASTER charts that count toward a plate. */
+  async plateProgressRanking(versions: readonly string[], scores: ScoreRecord[], standardOnly = false, excludedTitles: readonly string[] = []): Promise<ScoreRecord[]> {
+    const { charts, knownVersions } = await this.load(true);
+    if (versions.some((version) => !knownVersions.has(version))) throw new Error("プレートのバージョン情報を照合できませんでした。");
+    const targetVersions = new Set(versions);
+    const excluded = new Set(excludedTitles);
+    return this.scoreCharts(charts.filter((chart) => chart.version !== undefined
+      && targetVersions.has(chart.version)
+      && !excluded.has(chart.title)
+      && normalizeDifficulty(chart.difficulty) !== "remaster"
+      && (!standardOnly || chart.chartType === "standard")), scores);
   }
 }

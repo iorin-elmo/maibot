@@ -53,6 +53,17 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
     assert.deepEqual(newChartRanking.map((score) => score.achievements), [98, undefined]);
     assert.deepEqual(newChartRanking.map((score) => score.internalLevel), [14.2, 14.1]);
 
+    const progressScores = [{
+      title: "New", difficulty: "MASTER", level: "14", achievements: 98, comboStatus: "FC" as const, syncStatus: "FS" as const,
+      rating: 0, chartKind: "new" as const, chartType: "dx" as const
+    }];
+    const levelProgress = await catalog.levelProgressRanking("14", progressScores);
+    assert.deepEqual(levelProgress.map((score) => score.title), ["New", "Unplayed"]);
+    assert.deepEqual(levelProgress.map((score) => score.comboStatus), ["FC", undefined]);
+    const plateProgress = await catalog.plateProgressRanking(["new-1"], progressScores);
+    assert.deepEqual(plateProgress.map((score) => score.title), ["New"]);
+    assert.equal(plateProgress[0].syncStatus, "FS");
+
     const typedLevelLessRanking = await catalog.newestChartConstantRanking([{
       title: "New", difficulty: "MASTER", achievements: 97, rating: 0, chartKind: "new", chartType: "dx"
     }]);
@@ -62,14 +73,20 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
       versions: [{ version: "old" }, { version: "new-1" }, { version: "new-2" }],
       songs: [{ title: "Ambiguous", version: "new-2", sheets: [
         { type: "dx", difficulty: "MASTER", level: "14", internalLevelValue: 14 },
-        { type: "std", difficulty: "MASTER", level: "14", internalLevelValue: 14 }
+        { type: "std", difficulty: "MASTER", level: "14", internalLevelValue: 14 },
+        { type: "dx", difficulty: "RE:MASTER", level: "14", internalLevelValue: 14 }
       ] }]
     };
     const ambiguousCatalog = new MaimaiCatalog("https://example.invalid/dxdata.json");
     const ambiguousRanking = await ambiguousCatalog.newestChartConstantRanking([{
       title: "Ambiguous", difficulty: "MASTER", achievements: 98, rating: 0, chartKind: "new"
     }]);
-    assert.deepEqual(ambiguousRanking.map((score) => score.achievements), [undefined, undefined]);
+    assert.deepEqual(ambiguousRanking.map((score) => score.achievements), [undefined, undefined, undefined]);
+    assert.equal((await ambiguousCatalog.plateProgressRanking(["new-2"], [])).length, 2);
+    const remasterProgress = await ambiguousCatalog.levelProgressRanking("14", [{
+      title: "Ambiguous", difficulty: "REMASTER", level: "14", achievements: 98, rating: 0, chartKind: "new", chartType: "dx"
+    }]);
+    assert.equal(remasterProgress.find((score) => score.difficulty === "RE:MASTER")?.achievements, 98);
 
     document = {
       versions: [{ version: "old" }, { version: "new-1" }, { version: "new-2" }],

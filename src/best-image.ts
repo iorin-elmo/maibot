@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { createCanvas, GlobalFonts, loadImage, type SKRSContext2D } from "@napi-rs/canvas";
-import { dxScorePercent, dxStar, type BestCandidate, type DxStarCandidate } from "./analysis.js";
+import { achievementRank, dxScorePercent, dxStar, type BestCandidate, type DxStarCandidate } from "./analysis.js";
 import type { ScoreRecord } from "./types.js";
 import { truncateSongTitle } from "./text.js";
 
@@ -185,6 +185,28 @@ export function dxStarCandidateCards(candidates: DxStarCandidate[]): CardItem[] 
     topRight: `☆${candidate.targetStars} -${candidate.missingScore}`,
     bottom: `${candidate.score.dxScore ?? 0}/${candidate.score.dxScoreMax ?? 0} (${(dxScorePercent(candidate.score) ?? 0).toFixed(3)}%)`,
     accent: difficultyAccent(candidate.score.difficulty)
+  }));
+}
+
+export function newConstantCards(scores: ScoreRecord[]): CardItem[] {
+  return scores.map((score, index) => ({
+    score,
+    topLeft: `#${index + 1} Lv${score.internalLevel?.toFixed(1) ?? "?"}`,
+    topRight: `${score.chartType === "standard" ? "STD" : "DX"} ${score.difficulty.toUpperCase()}`,
+    bottom: score.achievements === undefined ? "-%" : `${score.achievements.toFixed(4)}%`,
+    accent: difficultyAccent(score.difficulty)
+  }));
+}
+
+export function progressCards(scores: ScoreRecord[], showComboAndSync: boolean): CardItem[] {
+  return scores.map((score, index) => ({
+    score,
+    topLeft: `#${index + 1} Lv${score.internalLevel?.toFixed(1) ?? "?"}`,
+    topRight: showComboAndSync
+      ? `${score.comboStatus ?? "-"} / ${score.syncStatus ?? "-"}`
+      : score.achievements === undefined ? "--" : achievementRank(score.achievements),
+    bottom: score.achievements === undefined ? "-%" : `${score.achievements.toFixed(4)}%`,
+    accent: difficultyAccent(score.difficulty)
   }));
 }
 

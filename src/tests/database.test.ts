@@ -20,10 +20,11 @@ test("プロフィールの再インポートは前のスコアを置き換え�
     });
     db.importProfile("discord-user", {
       playerName: "Player", rating: 1200,
-      scores: [{ title: "new", difficulty: "EXPERT", rating: 120, chartKind: "new" }]
+      scores: [{ title: "new", difficulty: "EXPERT", rating: 120, chartKind: "new", comboStatus: "FC+", syncStatus: "FDX" }]
     });
     assert.equal(db.getAccount("discord-user")?.rating, 1200);
     assert.deepEqual(db.getScores("discord-user").map((score) => score.title), ["new"]);
+    assert.deepEqual(db.getScores("discord-user").map(({ comboStatus, syncStatus }) => ({ comboStatus, syncStatus })), [{ comboStatus: "FC+", syncStatus: "FDX" }]);
     assert.equal(db.unlink("discord-user"), true);
     assert.equal(db.getScores("discord-user").length, 0);
   } finally {
