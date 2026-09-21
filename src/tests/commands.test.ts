@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { renderCandidate, renderDxScore, renderDxStarCandidate } from "../commands.js";
+import { difficultyAccent, renderScoreCardImages } from "../best-image.js";
 
 test("候補表示は達成率とランクの桁数に関係なく列がそろう", () => {
   const under100 = renderCandidate({
@@ -27,4 +28,24 @@ test("DX score rows use the requested percent, score fraction, and star formats"
   assert.equal(renderDxScore(fourDigitAligned, 1), "# 2  969/2229 (43.472%) ☆0 / Low DX Song");
   assert.equal(renderDxStarCandidate({ score, currentStars: 4, targetStars: 5, missingScore: 1 }, 0), "# 1  969/1000 (96.900%) ☆5 -1 / DX Song");
   assert.equal(renderDxStarCandidate({ score, currentStars: 4, targetStars: 5, missingScore: 1 }, 0, 2), "# 1  969/1000 (96.900%) ☆5  -1 / DX Song");
+});
+
+test("score cards render 50 songs as a single sheet even when jackets are unavailable", async () => {
+  const cards = Array.from({ length: 50 }, (_, index) => ({
+    score: { title: `No Jacket ${index + 1}`, difficulty: "MASTER", rating: 0 },
+    topLeft: `#${index + 1} Lv14`,
+    topRight: "☆5",
+    bottom: "1000/1000 (100.000%)"
+  }));
+  const images = await renderScoreCardImages("Tester", "DXスコア%順", cards);
+  assert.equal(images.length, 1);
+  assert.ok(images[0].length > 10_000);
+});
+
+test("score card frames use the maimai difficulty colours", () => {
+  assert.equal(difficultyAccent("BASIC"), "#48c95a");
+  assert.equal(difficultyAccent("ADVANCED"), "#f49a36");
+  assert.equal(difficultyAccent("EXPERT"), "#ed4c55");
+  assert.equal(difficultyAccent("MASTER"), "#9a62db");
+  assert.equal(difficultyAccent("RE:MASTER"), "#ffffff");
 });

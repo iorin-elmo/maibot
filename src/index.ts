@@ -7,7 +7,8 @@ import { MaimaiCatalog } from "./catalog.js";
 
 const db = new BotDatabase(config.databasePath);
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-startBrowserSyncServer(config.importBaseUrl, config.syncListenHost, config.syncListenPort, db, new MaimaiCatalog(config.dxdataUrl));
+const catalog = new MaimaiCatalog(config.dxdataUrl);
+startBrowserSyncServer(config.importBaseUrl, config.syncListenHost, config.syncListenPort, db, catalog);
 
 async function registerCommands(): Promise<void> {
   const rest = new REST({ version: "10" }).setToken(config.discordToken);
@@ -30,7 +31,7 @@ client.once(Events.ClientReady, async (readyClient) => {
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand() || interaction.commandName !== "maimai") return;
   try {
-    await handleMaimai(interaction as ChatInputCommandInteraction, db, config.importBaseUrl);
+    await handleMaimai(interaction as ChatInputCommandInteraction, db, config.importBaseUrl, catalog);
   } catch (error) {
     console.error("Interaction failed", error);
     const content = `処理できませんでした: ${error instanceof Error ? error.message : "不明なエラー"}`;

@@ -8,6 +8,8 @@ export interface ScoreRecord {
   dxScore?: number;
   /** The chart's theoretical maximum DX score. */
   dxScoreMax?: number;
+  /** Stable jacket identifier supplied by the DX data catalogue. */
+  jacketImageName?: string;
   rating: number;
   chartKind?: ChartKind;
   chartType?: "dx" | "standard";
