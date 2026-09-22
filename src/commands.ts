@@ -7,6 +7,8 @@ import { bestCards, candidateCards, dxScoreCards, dxStarCandidateCards, newConst
 import type { MaimaiCatalog } from "./catalog.js";
 import type { BotDatabase } from "./database.js";
 import { isComboOrSyncKind, levelProgressKinds, plateByVersionAndKind, plateGoalDescription, plateVersions, progressKindSatisfied, type LevelProgressKind, type PlateKind } from "./progress.js";
+import { registerSyncNotification } from "./sync-notification.js";
+import { syncSummaryEmbed } from "./sync-summary.js";
 import { padDisplayEnd, truncateSongTitle } from "./text.js";
 import type { ScoreRecord } from "./types.js";
 
@@ -253,10 +255,13 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   }
   if (subcommand === "sync") {
     const token = db.createImportToken(interaction.user.id);
+    registerSyncNotification(token, async (summary) => {
+      await interaction.followUp({ embeds: [syncSummaryEmbed(summary)] });
+    });
     const bookmarklet = makeFreeBookmarklet(importBaseUrl, token);
     const instructions = "maimai DX NETへログイン済みのブラウザで、任意のページから実行してください。全難易度の楽曲スコアを取得してBest 50を計算します。";
     await interaction.reply({
-      content: `下のコード全体をコピーして、ブラウザのブックマークURL欄に貼り付けてください。${instructions}\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのリンクは10分間・1回だけ有効です。SEGA ID・パスワードは送信されません。`,
+      content: `下のコード全体をコピーして、ブラウザのブックマークURL欄に貼り付けてください。${instructions}\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのリンクは10分間・1回だけ有効です。SEGA ID・パスワードは送信されません。同期が終わると、このチャンネルに結果を通知します。`,
       ephemeral: true
     });
     return;

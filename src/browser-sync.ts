@@ -3,6 +3,8 @@ import { validateProfile } from "./analysis.js";
 import type { MaimaiCatalog } from "./catalog.js";
 import type { BotDatabase } from "./database.js";
 import type { ChartKind, ComboStatus, ImportedProfile, SyncStatus } from "./types.js";
+import { createSyncSummary } from "./sync-summary.js";
+import { takeSyncNotification } from "./sync-notification.js";
 
 interface BrowserScore { title: string; difficulty: string; level?: string; achievements?: number; dxScore?: number; comboStatus?: ComboStatus; syncStatus?: SyncStatus; chartKind: ChartKind; chartType: "dx" | "standard"; officialRank?: number; }
 interface BrowserPayload { playerName: string; rating: number; scores: BrowserScore[]; }
@@ -155,10 +157,11 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
     if (request.method !== "POST" || requestUrl.pathname !== "/v1/browser-sync") return respond(response, 404, { error: "not found" });
     const token = request.headers["x-import-token"];
     if (typeof token !== "string" || !token) return respond(response, 401, { error: "token required" });
+    const notify = takeSyncNotification(token);
     const discordUserId = db.consumeImportToken(token);
     if (!discordUserId) return respond(response, 401, { error: "token expired" });
     try {
-      const count = await serializeImport(discordUserId, async () => {
+      const result = await serializeImport(discordUserId, async () => {
       const payload = await requestJson(request) as BrowserPayload;
       const parsedProfile = asProfile(payload);
       if (!parsedProfile.scores.length) throw new Error("スコアを読み取れなかったため、既存データは変更しませんでした。");
@@ -181,10 +184,16 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
         validateStandardSnapshot(existingScores, enrichedScores);
       }
       const scores = isFreeSync ? enrichedScores : mergeStandardScores(existingScores, enrichedScores);
+      const summary = createSyncSummary(account, existingScores, profile.playerName, profile.rating, scores);
       db.importProfile(discordUserId, { ...profile, scores });
-      return parsedProfile.scores.length;
+      return { count: parsedProfile.scores.length, summary };
       });
-      return respond(response, 200, { ok: true, count });
+      try {
+        await notify?.(result.summary);
+      } catch (error) {
+        console.warn(`Sync notification failed for ${discordUserId}`, error);
+      }
+      return respond(response, 200, { ok: true, count: result.count });
     } catch (error) { return respond(response, 400, { error: error instanceof Error ? error.message : "invalid request" }); }
   });
   server.listen(listenPort, listenHost); server.on("error", (error) => console.error("Browser sync server failed", error));
