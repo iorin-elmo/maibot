@@ -31,7 +31,6 @@ const defaultSyncListenHost = importUrl.hostname === "::1" || importUrl.hostname
 
 export const config = {
   discordToken: required("DISCORD_TOKEN"),
-  guildId: process.env.DISCORD_GUILD_ID?.trim(),
   databasePath: process.env.DATABASE_PATH?.trim() || "./data/maibot.sqlite",
   importBaseUrl,
   syncListenHost: process.env.SYNC_LISTEN_HOST?.trim() || defaultSyncListenHost,

@@ -4,8 +4,10 @@ import { maimaiCommand, renderCandidate, renderDxScore, renderDxStarCandidate, r
 import { difficultyAccent, newConstantCards, progressCards, renderScoreCardImages } from "../best-image.js";
 
 test("maimai command is available in bot DMs", () => {
-  const command = maimaiCommand.toJSON() as { contexts?: number[] };
+  const command = maimaiCommand.toJSON() as { contexts?: number[]; options: Array<{ name: string }> };
   assert.deepEqual(command.contexts, [0, 1]);
+  assert.ok(command.options.some((option) => option.name === "sync"));
+  assert.ok(!command.options.some((option) => option.name === "fsync"));
 });
 
 test("候補表示は達成率とランクの桁数に関係なく列がそろう", () => {

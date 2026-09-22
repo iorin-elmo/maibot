@@ -2,7 +2,7 @@ import {
   AttachmentBuilder, EmbedBuilder, InteractionContextType, SlashCommandBuilder, type ChatInputCommandInteraction, type SlashCommandIntegerOption, type SlashCommandStringOption
 } from "discord.js";
 import { achievementRank, bestCandidates, bestScores, dxScorePercent, dxStar, dxStarCandidates, type BestCandidate, type DxStarCandidate } from "./analysis.js";
-import { makeFreeBookmarklet, makePremiumBookmarkletSecure } from "./browser-sync.js";
+import { makeFreeBookmarklet } from "./browser-sync.js";
 import { bestCards, candidateCards, dxScoreCards, dxStarCandidateCards, newConstantCards, progressCards, renderScoreCardImages } from "./best-image.js";
 import type { MaimaiCatalog } from "./catalog.js";
 import type { BotDatabase } from "./database.js";
@@ -53,8 +53,7 @@ export const maimaiCommand = new SlashCommandBuilder()
   .setDescription("maimaiのベスト枠を表示します")
   .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM)
   .addSubcommand((command) => command.setName("help").setDescription("使い方を表示します"))
-  .addSubcommand((command) => command.setName("sync").setDescription("StandardコースのRatingページから同期します"))
-  .addSubcommand((command) => command.setName("fsync").setDescription("無料コースのversion別スコアから同期します"))
+  .addSubcommand((command) => command.setName("sync").setDescription("無料コースのversion別スコアから同期します"))
   .addSubcommand((command) => command.setName("newconstant").setDescription("新曲譜面を定数が高い順に表示します")
     .addIntegerOption(newConstantCountOption)
     .addBooleanOption(imageOption))
@@ -201,7 +200,7 @@ export function renderDxStarCandidate(candidate: DxStarCandidate, index: number,
 
 function candidateEmbeds(playerName: string, kind: "new" | "old", candidates: BestCandidate[], hasOutsideCharts: boolean): EmbedBuilder[] {
   const label = kind === "new" ? "新曲枠の候補" : "旧曲枠の候補";
-  const syncNote = hasOutsideCharts ? "" : "Best枠外の候補を含めるには `/maimai fsync` が必要です。\n";
+  const syncNote = hasOutsideCharts ? "" : "Best枠外の候補を含めるには `/maimai sync` が必要です。\n";
   if (!candidates.length) return [new EmbedBuilder()
     .setColor(0xff5a9e)
     .setTitle(`${playerName} の${label}`)
@@ -234,17 +233,16 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     const embed = new EmbedBuilder()
       .setColor(0xff5a9e)
       .setTitle("maimai Bot の使い方")
-      .setDescription("Standardコースなら `/maimai sync`、無料コースなら `/maimai fsync` を実行し、返信のブックマークレットをログイン済みのmaimai DX NET上で実行してください。")
+      .setDescription("`/maimai sync` を実行し、返信のブックマークレットをログイン済みのmaimai DX NET上で実行してください。")
       .addFields(
-        { name: "/maimai sync", value: "Standardコースの「でらっくすRating」ページから同期" },
-        { name: "/maimai fsync", value: "無料コース向け。version別スコアからBest 50を計算して同期" },
+        { name: "/maimai sync", value: "無料コース向け。version別スコアからBest 50を計算して同期" },
         { name: "/maimai newconstant [count] [image]", value: "新曲（最新2バージョン）のDX/STD譜面を定数が高い順に表示。image でジャケット画像、既定30件・最大50件" },
         { name: "/maimai plate <version> <kind> [count] [image]", value: "指定プレートに不足している譜面を定数が高い順に表示。version は 熊・彩など、kind は 神・極・将・舞舞。image でジャケット画像" },
         { name: "/maimai level <level> <kind> [count] [image]", value: "指定レベルの未AP+/AP/SSS+/SSS/SS+/SS/S+/S/FC+/FC/FDXを達成率順に表示。image でジャケット画像" },
         { name: "/maimai best [kind] [image]", value: "PC向けの詳しいベスト枠表示。image を有効にするとジャケット付きカード画像" },
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
         { name: "/maimai image [kind]", value: "ベスト枠を画像で表示" },
-        { name: "/maimai candidate [kind] [count] [image]", value: "次ランク到達でBestレートが伸びる候補。枠外候補の算出には /maimai fsync が必要（既定10件、最大50件）" },
+        { name: "/maimai candidate [kind] [count] [image]", value: "次ランク到達でBestレートが伸びる候補。枠外候補の算出には /maimai sync が必要（既定10件、最大50件）" },
         { name: "/maimai dxscore <level> [count] [image]", value: "指定レベルのDXスコア%順。現在DXスコア / 譜面ごとの最大DXスコアを表示（既定10件、最大50件）" },
         { name: "/maimai dxstar <level> <star> [count] [image]", value: "指定レベルで、次の指定星まであと何DXスコアかが少ない順。star は1〜6（既定10件、最大50件）" },
         { name: "kind", value: "新曲 / 旧曲 / 全曲。省略時は全曲。" },
@@ -253,13 +251,10 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     await interaction.reply({ embeds: [embed], ephemeral: true });
     return;
   }
-  if (subcommand === "sync" || subcommand === "fsync") {
+  if (subcommand === "sync") {
     const token = db.createImportToken(interaction.user.id);
-    const freeCourse = subcommand === "fsync";
-    const bookmarklet = freeCourse ? makeFreeBookmarklet(importBaseUrl, token) : makePremiumBookmarkletSecure(importBaseUrl, token);
-    const instructions = freeCourse
-      ? "maimai DX NETへログイン済みのブラウザで、任意のページから実行してください。全難易度の楽曲スコアを取得してBest 50を計算します。"
-      : "maimai DX NETへログイン済みのブラウザで、でらっくすRatingページを開いて実行してください。公式のBest 50を同期します。";
+    const bookmarklet = makeFreeBookmarklet(importBaseUrl, token);
+    const instructions = "maimai DX NETへログイン済みのブラウザで、任意のページから実行してください。全難易度の楽曲スコアを取得してBest 50を計算します。";
     await interaction.reply({
       content: `下のコード全体をコピーして、ブラウザのブックマークURL欄に貼り付けてください。${instructions}\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのリンクは10分間・1回だけ有効です。SEGA ID・パスワードは送信されません。`,
       ephemeral: true
@@ -269,7 +264,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
 
   const account = db.getAccount(interaction.user.id);
   if (!account || account.rating === null) {
-    await interaction.reply({ content: "先に Standardコースなら `/maimai sync`、無料コースなら `/maimai fsync` でベスト枠を同期してください。", ephemeral: true });
+    await interaction.reply({ content: "先に `/maimai sync` でベスト枠を同期してください。", ephemeral: true });
     return;
   }
 
@@ -295,7 +290,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     await interaction.editReply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
       .setColor(0xff5a9e)
       .setTitle(`${playerName} の新曲譜面定数順${index ? "（続き）" : ""}`)
-      .setDescription(`${index ? "" : "**新曲（最新2バージョン）のDX/STD譜面を譜面定数が高い順に表示します。未プレイ、またはStandardコース同期のBest枠外は -% と表示します。全スコアの反映には `/maimai fsync` を利用してください。**\n\n"}${description}`)) });
+        .setDescription(`${index ? "" : "**新曲（最新2バージョン）のDX/STD譜面を譜面定数が高い順に表示します。未プレイは -% と表示します。全スコアの反映には `/maimai sync` を利用してください。**\n\n"}${description}`)) });
     return;
   }
   if (subcommand === "plate") {
@@ -330,7 +325,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       return;
     }
     const descriptions = splitLines(scores.map((score, index) => renderProgressScore(score, index, plate.goal)), 3_900).map(asCodeBlock);
-    const plateSummary = `**${plate.label}の全譜面 ${plateGoalDescription(plate.goal)} に足りない譜面を、譜面定数が高い順に表示します。状態を反映するには \`/maimai fsync\` を再実行してください。**\n\n`;
+    const plateSummary = `**${plate.label}の全譜面 ${plateGoalDescription(plate.goal)} に足りない譜面を、譜面定数が高い順に表示します。状態を反映するには \`/maimai sync\` を再実行してください。**\n\n`;
     await interaction.editReply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
       .setColor(0xff5a9e)
       .setTitle(`${playerName} の${plate.name}候補曲${index ? "（続き）" : ""}`)
@@ -364,7 +359,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       return;
     }
     const descriptions = splitLines(scores.map((score, index) => renderProgressScore(score, index, kind)), 3_900).map(asCodeBlock);
-    const levelSummary = `**Lv.${level} の未${kind}譜面を達成率が高い順に表示します。未プレイは -% です。AP/FC/FDXの状態を反映するには \`/maimai fsync\` を再実行してください。**\n\n`;
+    const levelSummary = `**Lv.${level} の未${kind}譜面を達成率が高い順に表示します。未プレイは -% です。AP/FC/FDXの状態を反映するには \`/maimai sync\` を再実行してください。**\n\n`;
     await interaction.editReply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
       .setColor(0xff5a9e)
       .setTitle(`${playerName} の Lv.${level} 未${kind}一覧${index ? "（続き）" : ""}`)
@@ -382,7 +377,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
           || a.title.localeCompare(b.title, "ja"))
         .slice(0, count);
       if (!scores.length) {
-        await interaction.reply({ content: `Lv.${level} のDXスコアを表示できる譜面がありません。 \`/maimai fsync\` を再実行してからお試しください。`, ephemeral: true });
+        await interaction.reply({ content: `Lv.${level} のDXスコアを表示できる譜面がありません。 \`/maimai sync\` を再実行してからお試しください。`, ephemeral: true });
         return;
       }
       if (wantsImage) {
@@ -402,7 +397,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     const targetStars = interaction.options.getInteger("star", true);
     const candidates = dxStarCandidates(allScores, level, targetStars, count);
     if (!candidates.length) {
-      await interaction.reply({ content: `Lv.${level} に ☆${targetStars} 未満のDXスコア候補がありません。 \`/maimai fsync\` を再実行してからお試しください。`, ephemeral: true });
+      await interaction.reply({ content: `Lv.${level} に ☆${targetStars} 未満のDXスコア候補がありません。 \`/maimai sync\` を再実行してからお試しください。`, ephemeral: true });
       return;
     }
     if (wantsImage) {
@@ -452,7 +447,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
 
   const scores = kind === "new" ? newBest : kind === "old" ? oldBest : [...newBest, ...oldBest];
   if (!scores.length) {
-    await interaction.reply({ content: "表示できるベスト枠がありません。Standardコースなら `/maimai sync`、無料コースなら `/maimai fsync` をやり直してください。", ephemeral: true });
+    await interaction.reply({ content: "表示できるベスト枠がありません。`/maimai sync` をやり直してください。", ephemeral: true });
     return;
   }
 
