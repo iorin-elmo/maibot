@@ -10,21 +10,26 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const catalog = new MaimaiCatalog(config.dxdataUrl);
 startBrowserSyncServer(config.importBaseUrl, config.syncListenHost, config.syncListenPort, db, catalog);
 
+type RegisteredCommand = { id: string; name: string; type: number };
+
 async function registerCommands(): Promise<void> {
   const rest = new REST({ version: "10" }).setToken(config.discordToken);
   const applicationId = client.user?.id;
   if (!applicationId) throw new Error("Discord application IDを取得できませんでした。");
   const body = [maimaiCommand.toJSON()];
-  // Global commands are required for Bot DMs. Keep the optional guild registration
-  // too, so configured development guilds continue to receive instant updates.
   await rest.put(Routes.applicationCommands(applicationId), { body });
-  if (config.guildId) await rest.put(Routes.applicationGuildCommands(applicationId, config.guildId), { body });
+  if (config.guildId) {
+    const commands = await rest.get(Routes.applicationGuildCommands(applicationId, config.guildId)) as RegisteredCommand[];
+    await Promise.all(commands
+      .filter((command) => command.name === "maimai" && command.type === 1)
+      .map((command) => rest.delete(Routes.applicationGuildCommand(applicationId, config.guildId!, command.id))));
+  }
 }
 
 client.once(Events.ClientReady, async (readyClient) => {
   try {
     await registerCommands();
-    console.log(`Ready: ${readyClient.user.tag} (global${config.guildId ? " and guild" : ""} commands registered)`);
+    console.log(`Ready: ${readyClient.user.tag} (global commands registered)`);
   } catch (error) {
     console.error("Command registration failed", error);
   }
