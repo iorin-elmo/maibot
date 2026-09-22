@@ -32,19 +32,19 @@
       <div class="section-heading">
         <p class="eyebrow">GET STARTED</p>
         <h2>はじめての同期</h2>
-        <p>無料コースの場合は <code>/maimai fsync</code>、Standardコースの場合は <code>/maimai sync</code> を使います。</p>
+        <p><code>/maimai sync</code> を使って、無料コースの全難易度スコアを同期します。</p>
       </div>
       <ol class="guide">
         <li class="guide-item">
-          <div class="guide-copy"><span>STEP 1</span><h3>Discordで同期コマンドを実行</h3><p>無料コースは <code>/maimai fsync</code>、Standardコースは <code>/maimai sync</code> を実行します。返信にあるコード全体をコピーしてください。</p></div>
-          <figure><img src="assets/discord-fsync.png" alt="Discordでmaimai fsyncを実行し、同期用ブックマークレットを受け取った画面"><figcaption>同期用コードは1回限り・発行から10分間だけ有効です。</figcaption></figure>
+          <div class="guide-copy"><span>STEP 1</span><h3>Discordで同期コマンドを実行</h3><p><code>/maimai sync</code> を実行します。返信にあるコード全体をコピーしてください。</p></div>
+          <figure><img src="assets/discord-fsync.png" alt="Discordでmaimai syncを実行し、同期用ブックマークレットを受け取った画面"><figcaption>同期用コードは1回限り・発行から10分間だけ有効です。</figcaption></figure>
         </li>
         <li class="guide-item">
           <div class="guide-copy"><span>STEP 2</span><h3>ブックマークを作成</h3><p>ブラウザで新しいブックマークを作り、URL欄にコピーしたコードを貼り付けて保存します。名前は任意です。</p></div>
           <figure><img src="assets/bookmark-edit.png" alt="ブラウザのブックマーク編集画面でURL欄に同期用コードを貼り付けている画面"><figcaption>URL欄の先頭が <code>javascript:</code> になっていることを確認します。</figcaption></figure>
         </li>
         <li class="guide-item">
-          <div class="guide-copy"><span>STEP 3</span><h3>maimai DX NETでブックマークを実行</h3><p>maimai DX NETへログインし、作成したブックマークを実行します。無料コースは任意ページ、Standardコースは「でらっくすRating」ページで実行してください。</p></div>
+          <div class="guide-copy"><span>STEP 3</span><h3>maimai DX NETでブックマークを実行</h3><p>maimai DX NETへログインし、任意のページで作成したブックマークを実行します。</p></div>
           <figure class="best-image"><img src="assets/best50.jpg" alt="ジャケットと達成率を重ねたmaimai Best 50の画像出力例"><figcaption>同期後は <code>/maimai image</code> で、ジャケット付きBest 50を1枚の画像で確認できます。</figcaption></figure>
         </li>
       </ol>
@@ -73,7 +73,7 @@
       <details><summary>DXスコアの☆6は表示できる？</summary><p>できます。☆6は99%以上として計算されます。<code>/maimai dxstar level:14 star:6</code> のように指定してください。</p></details>
       <details><summary>プレート進捗はどう確認する？</summary><p><code>/maimai plate version:熊 kind:神</code> のように、バージョンと目標を指定します。必要な譜面は定数が高い順に表示され、<code>image:true</code> でジャケット画像にもできます。</p></details>
       <details><summary>レベルごとに未達成譜面を探せる？</summary><p><code>/maimai level level:14+ kind:AP</code> のように指定します。AP・FC・FDX系はコンボ／シンク状況、ランク系は現在のランクも併せて確認できます。</p></details>
-      <details><summary>新曲で未プレイの譜面も見たい</summary><p><code>/maimai newconstant</code> を使ってください。未プレイは <code>-%</code> として表示されます。全譜面の反映には無料コース向けの <code>/maimai fsync</code> が便利です。</p></details>
+      <details><summary>新曲で未プレイの譜面も見たい</summary><p><code>/maimai newconstant</code> を使ってください。未プレイは <code>-%</code> として表示されます。全譜面の反映には <code>/maimai sync</code> を使ってください。</p></details>
       <details><summary>画像のジャケットが表示されない</summary><p>ジャケット配信元への一時的な接続失敗時は、ジャケットなしで出力されます。少し時間をおいてもう一度画像出力してください。</p></details>
     </section>
   </main>
