@@ -12,18 +12,26 @@ startBrowserSyncServer(config.importBaseUrl, config.syncListenHost, config.syncL
 
 type RegisteredCommand = { id: string; name: string; type: number };
 
+async function removeLegacyGuildCommands(rest: REST, applicationId: string): Promise<void> {
+  for (const guildId of client.guilds.cache.keys()) {
+    try {
+      const commands = await rest.get(Routes.applicationGuildCommands(applicationId, guildId)) as RegisteredCommand[];
+      await Promise.all(commands
+        .filter((command) => command.name === "maimai" && command.type === 1)
+        .map((command) => rest.delete(Routes.applicationGuildCommand(applicationId, guildId, command.id))));
+    } catch (error) {
+      console.warn(`Legacy command cleanup failed for guild ${guildId}`, error);
+    }
+  }
+}
+
 async function registerCommands(): Promise<void> {
   const rest = new REST({ version: "10" }).setToken(config.discordToken);
   const applicationId = client.user?.id;
   if (!applicationId) throw new Error("Discord application IDを取得できませんでした。");
   const body = [maimaiCommand.toJSON()];
   await rest.put(Routes.applicationCommands(applicationId), { body });
-  if (config.guildId) {
-    const commands = await rest.get(Routes.applicationGuildCommands(applicationId, config.guildId)) as RegisteredCommand[];
-    await Promise.all(commands
-      .filter((command) => command.name === "maimai" && command.type === 1)
-      .map((command) => rest.delete(Routes.applicationGuildCommand(applicationId, config.guildId!, command.id))));
-  }
+  await removeLegacyGuildCommands(rest, applicationId);
 }
 
 client.once(Events.ClientReady, async (readyClient) => {

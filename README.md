@@ -29,8 +29,6 @@ Copy-Item .env.example .env
 npm run dev
 ```
 
-開発サーバーへ即時にコマンドを反映する場合は、`.env` に `DISCORD_GUILD_ID` を設定します。
-
 ## 同期方法
 
 1. Discordで `/maimai sync` を実行する。
