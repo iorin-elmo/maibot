@@ -4,8 +4,9 @@ import { registerSyncNotification, takeSyncNotification } from "../sync-notifica
 import type { SyncSummary } from "../sync-summary.js";
 
 const summary: SyncSummary = {
-  initial: true, playerName: "Player", scoreCount: 1, rating: 1000, scores: [],
-  updates: [], newApCount: 0, newFcCount: 0, newFdxCount: 0
+  initial: true, playerName: "Player", rating: 1000, scores: [], updates: [],
+  scoreRecordCount: 0, dxScoreRecordCount: 0, rankUpdateCount: 0, starUpdateCount: 0, newApPlusCount: 0, newApCount: 0, newFcPlusCount: 0, newFcCount: 0, newFdxCount: 0,
+  rankUpdates: [], starUpdates: [], lampUpdates: []
 };
 
 test("a sync notification is consumed once by its import token", async () => {

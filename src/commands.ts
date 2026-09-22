@@ -3,7 +3,7 @@ import {
 } from "discord.js";
 import { achievementRank, bestCandidates, bestScores, dxScorePercent, dxStar, dxStarCandidates, type BestCandidate, type DxStarCandidate } from "./analysis.js";
 import { makeFreeBookmarklet } from "./browser-sync.js";
-import { bestCards, candidateCards, dxScoreCards, dxStarCandidateCards, newConstantCards, progressCards, renderScoreCardImages, syncSummaryCards } from "./best-image.js";
+import { bestCards, candidateCards, dxScoreCards, dxStarCandidateCards, newConstantCards, progressCards, renderScoreCardImages, renderSyncSummaryImage } from "./best-image.js";
 import type { MaimaiCatalog } from "./catalog.js";
 import type { BotDatabase } from "./database.js";
 import { isComboOrSyncKind, levelProgressKinds, plateByVersionAndKind, plateGoalDescription, plateVersions, progressKindSatisfied, type LevelProgressKind, type PlateKind } from "./progress.js";
@@ -259,8 +259,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     const wantsImage = interaction.options.getBoolean("image") === true;
     registerSyncNotification(token, async (summary) => {
       const files = wantsImage
-        ? (await renderScoreCardImages(summary.playerName, "同期結果", syncSummaryCards(summary))).map((image, index) =>
-          new AttachmentBuilder(image, { name: `maimai-sync-${index + 1}.jpg` }))
+        ? [new AttachmentBuilder(await renderSyncSummaryImage(summary), { name: "maimai-sync-summary.jpg" })]
         : [];
       await interaction.followUp({ embeds: [syncSummaryEmbed(summary)], files });
     });

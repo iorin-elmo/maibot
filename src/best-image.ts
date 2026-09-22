@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { createCanvas, GlobalFonts, loadImage, type SKRSContext2D } from "@napi-rs/canvas";
 import { achievementRank, dxScorePercent, dxStar, type BestCandidate, type DxStarCandidate } from "./analysis.js";
-import type { SyncSummary } from "./sync-summary.js";
+import { formatAchievement, type SyncChartUpdate, type SyncSummary } from "./sync-summary.js";
 import type { ScoreRecord } from "./types.js";
 import { truncateSongTitle } from "./text.js";
 
@@ -211,26 +211,113 @@ export function progressCards(scores: ScoreRecord[], showComboAndSync: boolean):
   }));
 }
 
-export function syncSummaryCards(summary: SyncSummary): CardItem[] {
-  const updates: Array<{ score: ScoreRecord; previous?: ScoreRecord }> = summary.updates.length
-    ? summary.updates.map(({ score, previous }) => ({ score, previous }))
-    : summary.scores.slice()
-      .sort((left, right) => right.rating - left.rating)
-      .map((score) => ({ score }));
-  return updates.slice(0, 10).map((update, index) => {
-    const score = update.score;
-    const previous = update.previous;
-    const oldRank = achievementRank(previous?.achievements);
-    const currentRank = achievementRank(score.achievements);
+interface SyncImageItem { score: ScoreRecord; topLeft: string; topRight: string; detail: string; }
+
+function starOf(score: ScoreRecord | undefined): number {
+  return score ? dxStar(score) ?? 0 : 0;
+}
+
+function syncImageItems(kind: "rank" | "star" | "lamp", updates: SyncChartUpdate[]): SyncImageItem[] {
+  return updates.map(({ score, previous, achievementGain, dxScoreGain }) => {
+    if (kind === "rank") return {
+      score, topLeft: achievementRank(previous?.achievements), topRight: `${achievementRank(score.achievements)} ${score.rating}`,
+      detail: `${formatAchievement(previous?.achievements)} → ${formatAchievement(score.achievements)} (+${achievementGain?.toFixed(4) ?? "0.0000"}%)`
+    };
+    if (kind === "star") return {
+      score, topLeft: `Lv.${score.level ?? "?"}`, topRight: `☆${starOf(previous)}→${starOf(score)}`,
+      detail: `${previous?.dxScore ?? 0} → ${score.dxScore ?? 0} (+${dxScoreGain ?? 0})/${score.dxScoreMax ?? "?"}`
+    };
     return {
-      score,
-      topLeft: `${summary.initial ? "同期" : `#${index + 1}`} Lv${score.internalLevel?.toFixed(1) ?? score.level ?? "?"}`,
-      topRight: summary.initial ? currentRank : `${oldRank}→${currentRank}`,
-      bottom: previous ? `${previous.achievements?.toFixed(4) ?? "-"}% → ${score.achievements?.toFixed(4) ?? "-"}%`
-        : `${score.achievements?.toFixed(4) ?? "-"}% ${score.comboStatus ?? ""} ${score.syncStatus ?? ""}`.trim(),
-      accent: difficultyAccent(score.difficulty)
+      score, topLeft: previous?.comboStatus ?? "-", topRight: score.comboStatus ?? "-",
+      detail: `${formatAchievement(previous?.achievements)} → ${formatAchievement(score.achievements)} (+${achievementGain?.toFixed(4) ?? "0.0000"}%)`
     };
   });
+}
+
+function drawSyncCard(context: SKRSContext2D, item: SyncImageItem, image: Awaited<ReturnType<typeof loadImage>> | undefined, x: number, y: number, width: number, height: number): void {
+  drawCover(context, image, x, y, width, height);
+  context.strokeStyle = difficultyAccent(item.score.difficulty);
+  context.lineWidth = 3;
+  context.beginPath();
+  context.roundRect(x + 1.5, y + 1.5, width - 3, height - 3, 11);
+  context.stroke();
+  context.font = `bold 19px ${FONT_NAME}, monospace`;
+  context.lineWidth = 4;
+  context.strokeStyle = "rgba(25, 9, 36, 0.9)";
+  context.fillStyle = "#ffffff";
+  context.strokeText(item.topLeft, x + 10, y + 26);
+  context.fillText(item.topLeft, x + 10, y + 26);
+  context.textAlign = "right";
+  context.strokeText(item.topRight, x + width - 10, y + 26);
+  context.fillText(item.topRight, x + width - 10, y + 26);
+  context.textAlign = "left";
+  context.font = `bold 17px ${FONT_NAME}, monospace`;
+  const title = truncateSongTitle(item.score.title);
+  context.strokeText(title, x + 10, y + height - 43);
+  context.fillText(title, x + 10, y + height - 43);
+  let detailFontSize = 14;
+  do {
+    context.font = `bold ${detailFontSize}px ${FONT_NAME}, monospace`;
+    detailFontSize -= 1;
+  } while (context.measureText(item.detail).width > width - 20 && detailFontSize >= 10);
+  context.fillStyle = "#ffef75";
+  context.strokeText(item.detail, x + 10, y + height - 15);
+  context.fillText(item.detail, x + 10, y + height - 15);
+}
+
+export async function renderSyncSummaryImage(summary: SyncSummary): Promise<Buffer> {
+  const groups: Array<{ title: string; items: SyncImageItem[] }> = summary.initial
+    ? [{ title: "同期完了", items: summary.scores.slice().sort((left, right) => right.rating - left.rating).slice(0, 5).map((score) => ({
+      score, topLeft: `Lv.${score.internalLevel?.toFixed(1) ?? score.level ?? "?"}`, topRight: String(score.rating), detail: formatAchievement(score.achievements)
+    })) }]
+    : [
+      { title: "ランク更新", items: syncImageItems("rank", summary.rankUpdates) },
+      { title: "☆更新", items: syncImageItems("star", summary.starUpdates) },
+      { title: "ランプ更新", items: syncImageItems("lamp", summary.lampUpdates) }
+    ].filter((group) => group.items.length > 0);
+  const columns = 5;
+  const cardWidth = 236;
+  const cardHeight = 220;
+  const gutter = 12;
+  const headerHeight = 166;
+  const groupHeight = 42 + cardHeight + gutter;
+  const width = columns * cardWidth + (columns + 1) * gutter;
+  const height = headerHeight + Math.max(1, groups.length) * groupHeight + gutter;
+  const canvas = createCanvas(width, height);
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#211b2e";
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = "#ff5a9e";
+  context.fillRect(0, 0, width, 7);
+  context.fillStyle = "#f8f5ff";
+  context.font = `bold 25px ${FONT_NAME}, monospace`;
+  context.fillText(`${summary.playerName} の同期結果`, gutter, 38);
+  context.font = `bold 19px ${FONT_NAME}, monospace`;
+  const rating = summary.ratingGain === undefined ? String(summary.rating)
+    : `${summary.previousRating} → ${summary.rating}`;
+  context.fillText(`Rating: ${rating}`, gutter, 68);
+  if (summary.initial) {
+    context.fillText("初回同期が完了しました。/maimai best などを利用できます。", gutter, 96);
+  } else {
+    context.fillText(`スコア新記録: ${summary.scoreRecordCount}曲  ランク更新: ${summary.rankUpdateCount}曲`, gutter, 94);
+    context.fillText(`DXスコア新記録: ${summary.dxScoreRecordCount}曲  ☆更新: ${summary.starUpdateCount}曲`, gutter, 118);
+    context.fillText(`AP+ +${summary.newApPlusCount}曲 / AP +${summary.newApCount}曲 / FC+ +${summary.newFcPlusCount}曲 / FC +${summary.newFcCount}曲 / FDX +${summary.newFdxCount}曲`, gutter, 142);
+  }
+  let y = headerHeight;
+  for (const group of groups) {
+    context.fillStyle = "#ffb0d2";
+    context.font = `bold 21px ${FONT_NAME}, monospace`;
+    context.fillText(group.title, gutter, y + 27);
+    const jackets = await Promise.all(group.items.map((item) => jacket(item.score)));
+    group.items.forEach((item, index) => drawSyncCard(context, item, jackets[index], gutter + index * (cardWidth + gutter), y + 42, cardWidth, cardHeight));
+    y += groupHeight;
+  }
+  if (!groups.length) {
+    context.fillStyle = "#f8f5ff";
+    context.font = `bold 22px ${FONT_NAME}, monospace`;
+    context.fillText("今回の更新はありません。", gutter, headerHeight + 35);
+  }
+  return canvas.toBuffer("image/jpeg", 92);
 }
 
 // Kept for the existing /maimai image command. Its output now uses jacket cards.
