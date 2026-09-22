@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { createCanvas, GlobalFonts, loadImage, type SKRSContext2D } from "@napi-rs/canvas";
 import { achievementRank, dxScorePercent, dxStar, type BestCandidate, type DxStarCandidate } from "./analysis.js";
+import type { SyncSummary } from "./sync-summary.js";
 import type { ScoreRecord } from "./types.js";
 import { truncateSongTitle } from "./text.js";
 
@@ -208,6 +209,28 @@ export function progressCards(scores: ScoreRecord[], showComboAndSync: boolean):
     bottom: score.achievements === undefined ? "-%" : `${score.achievements.toFixed(4)}%`,
     accent: difficultyAccent(score.difficulty)
   }));
+}
+
+export function syncSummaryCards(summary: SyncSummary): CardItem[] {
+  const updates: Array<{ score: ScoreRecord; previous?: ScoreRecord }> = summary.updates.length
+    ? summary.updates.map(({ score, previous }) => ({ score, previous }))
+    : summary.scores.slice()
+      .sort((left, right) => right.rating - left.rating)
+      .map((score) => ({ score }));
+  return updates.slice(0, 10).map((update, index) => {
+    const score = update.score;
+    const previous = update.previous;
+    const oldRank = achievementRank(previous?.achievements);
+    const currentRank = achievementRank(score.achievements);
+    return {
+      score,
+      topLeft: `${summary.initial ? "同期" : `#${index + 1}`} Lv${score.internalLevel?.toFixed(1) ?? score.level ?? "?"}`,
+      topRight: summary.initial ? currentRank : `${oldRank}→${currentRank}`,
+      bottom: previous ? `${previous.achievements?.toFixed(4) ?? "-"}% → ${score.achievements?.toFixed(4) ?? "-"}%`
+        : `${score.achievements?.toFixed(4) ?? "-"}% ${score.comboStatus ?? ""} ${score.syncStatus ?? ""}`.trim(),
+      accent: difficultyAccent(score.difficulty)
+    };
+  });
 }
 
 // Kept for the existing /maimai image command. Its output now uses jacket cards.

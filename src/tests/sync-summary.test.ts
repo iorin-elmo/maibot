@@ -24,7 +24,9 @@ test("later sync reports score, rank, AP, and FDX improvements", () => {
   assert.equal(summary.updates[0].syncImproved, true);
   assert.equal(summary.newApCount, 1);
   assert.equal(summary.newFdxCount, 1);
-  const fields = syncSummaryEmbed(summary).toJSON().fields ?? [];
+  const embed = syncSummaryEmbed(summary).toJSON();
+  assert.equal(embed.title, "Player の同期結果");
+  const fields = embed.fields ?? [];
   assert.match(fields.find((field) => field.name === "更新された譜面（1）")?.value ?? "", /SS\+ → SSS\+/);
 });
 

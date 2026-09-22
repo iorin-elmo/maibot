@@ -4,9 +4,9 @@ import { maimaiCommand, renderCandidate, renderDxScore, renderDxStarCandidate, r
 import { difficultyAccent, newConstantCards, progressCards, renderScoreCardImages } from "../best-image.js";
 
 test("maimai command is available in bot DMs", () => {
-  const command = maimaiCommand.toJSON() as { contexts?: number[]; options: Array<{ name: string }> };
+  const command = maimaiCommand.toJSON() as { contexts?: number[]; options: Array<{ name: string; options?: Array<{ name: string }> }> };
   assert.deepEqual(command.contexts, [0, 1]);
-  assert.ok(command.options.some((option) => option.name === "sync"));
+  assert.ok(command.options.find((option) => option.name === "sync")?.options?.some((option) => option.name === "image"));
   assert.ok(!command.options.some((option) => option.name === "fsync"));
 });
 

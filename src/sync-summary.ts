@@ -22,6 +22,7 @@ export interface SyncSummary {
   previousRating?: number;
   rating: number;
   ratingGain?: number;
+  scores: ScoreRecord[];
   updates: SyncChartUpdate[];
   newApCount: number;
   newFcCount: number;
@@ -76,7 +77,7 @@ export function createSyncSummary(previousAccount: LinkedAccount | undefined, pr
   const newFcCount = updates.filter(({ score, previous }) => (score.comboStatus === "FC" || score.comboStatus === "FC+") && !previous?.comboStatus).length;
   const newFdxCount = updates.filter(({ score, previous }) => score.syncStatus === "FDX" && previous?.syncStatus !== "FDX").length;
   const ratingGain = previousAccount?.rating === null || previousAccount?.rating === undefined ? undefined : rating - previousAccount.rating;
-  return { initial, playerName, scoreCount: scores.length, previousRating: previousAccount?.rating ?? undefined, rating, ratingGain, updates, newApCount, newFcCount, newFdxCount };
+  return { initial, playerName, scoreCount: scores.length, previousRating: previousAccount?.rating ?? undefined, rating, ratingGain, scores, updates, newApCount, newFcCount, newFdxCount };
 }
 
 function formatAchievement(value: number | undefined): string {
@@ -132,7 +133,7 @@ export function syncSummaryEmbed(summary: SyncSummary): EmbedBuilder {
   const more = summary.updates.length > shown.length ? `\nほか ${summary.updates.length - shown.length} 譜面` : "";
   return new EmbedBuilder()
     .setColor(0x53c8f1)
-    .setTitle(`${summary.playerName} さんの同期結果`)
+      .setTitle(`${summary.playerName} の同期結果`)
     .setDescription(`Rating: ${rating}\n同期譜面数: ${summary.scoreCount}`)
     .addFields(
       { name: "新規達成", value: achievementSummary, inline: true },

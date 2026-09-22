@@ -4,7 +4,7 @@ import { registerSyncNotification, takeSyncNotification } from "../sync-notifica
 import type { SyncSummary } from "../sync-summary.js";
 
 const summary: SyncSummary = {
-  initial: true, playerName: "Player", scoreCount: 1, rating: 1000,
+  initial: true, playerName: "Player", scoreCount: 1, rating: 1000, scores: [],
   updates: [], newApCount: 0, newFcCount: 0, newFdxCount: 0
 };
 

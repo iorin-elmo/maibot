@@ -3,7 +3,7 @@ import {
 } from "discord.js";
 import { achievementRank, bestCandidates, bestScores, dxScorePercent, dxStar, dxStarCandidates, type BestCandidate, type DxStarCandidate } from "./analysis.js";
 import { makeFreeBookmarklet } from "./browser-sync.js";
-import { bestCards, candidateCards, dxScoreCards, dxStarCandidateCards, newConstantCards, progressCards, renderScoreCardImages } from "./best-image.js";
+import { bestCards, candidateCards, dxScoreCards, dxStarCandidateCards, newConstantCards, progressCards, renderScoreCardImages, syncSummaryCards } from "./best-image.js";
 import type { MaimaiCatalog } from "./catalog.js";
 import type { BotDatabase } from "./database.js";
 import { isComboOrSyncKind, levelProgressKinds, plateByVersionAndKind, plateGoalDescription, plateVersions, progressKindSatisfied, type LevelProgressKind, type PlateKind } from "./progress.js";
@@ -55,7 +55,8 @@ export const maimaiCommand = new SlashCommandBuilder()
   .setDescription("maimaiのベスト枠を表示します")
   .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM)
   .addSubcommand((command) => command.setName("help").setDescription("使い方を表示します"))
-  .addSubcommand((command) => command.setName("sync").setDescription("無料コースのversion別スコアから同期します"))
+  .addSubcommand((command) => command.setName("sync").setDescription("無料コースのversion別スコアから同期します")
+    .addBooleanOption(imageOption))
   .addSubcommand((command) => command.setName("newconstant").setDescription("新曲譜面を定数が高い順に表示します")
     .addIntegerOption(newConstantCountOption)
     .addBooleanOption(imageOption))
@@ -237,7 +238,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       .setTitle("maimai Bot の使い方")
       .setDescription("`/maimai sync` を実行し、返信のブックマークレットをログイン済みのmaimai DX NET上で実行してください。")
       .addFields(
-        { name: "/maimai sync", value: "無料コース向け。version別スコアからBest 50を計算して同期" },
+        { name: "/maimai sync [image]", value: "無料コース向け。version別スコアからBest 50を計算して同期。image で同期結果をジャケット付き画像でも出力" },
         { name: "/maimai newconstant [count] [image]", value: "新曲（最新2バージョン）のDX/STD譜面を定数が高い順に表示。image でジャケット画像、既定30件・最大50件" },
         { name: "/maimai plate <version> <kind> [count] [image]", value: "指定プレートに不足している譜面を定数が高い順に表示。version は 熊・彩など、kind は 神・極・将・舞舞。image でジャケット画像" },
         { name: "/maimai level <level> <kind> [count] [image]", value: "指定レベルの未AP+/AP/SSS+/SSS/SS+/SS/S+/S/FC+/FC/FDXを達成率順に表示。image でジャケット画像" },
@@ -255,8 +256,13 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   }
   if (subcommand === "sync") {
     const token = db.createImportToken(interaction.user.id);
+    const wantsImage = interaction.options.getBoolean("image") === true;
     registerSyncNotification(token, async (summary) => {
-      await interaction.followUp({ embeds: [syncSummaryEmbed(summary)] });
+      const files = wantsImage
+        ? (await renderScoreCardImages(summary.playerName, "同期結果", syncSummaryCards(summary))).map((image, index) =>
+          new AttachmentBuilder(image, { name: `maimai-sync-${index + 1}.jpg` }))
+        : [];
+      await interaction.followUp({ embeds: [syncSummaryEmbed(summary)], files });
     });
     const bookmarklet = makeFreeBookmarklet(importBaseUrl, token);
     const instructions = "maimai DX NETへログイン済みのブラウザで、任意のページから実行してください。全難易度の楽曲スコアを取得してBest 50を計算します。";
