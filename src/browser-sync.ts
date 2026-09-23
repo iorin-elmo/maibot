@@ -143,6 +143,10 @@ async function serializeImport<T>(discordUserId: string, task: () => Promise<T>)
 
 function makeFreeSyncScriptWithHeader(baseUrl: string, token: string): string {
   return makeFreeSyncScript(baseUrl, token)
+    .replace('ap[_-]?plus/.test(icons)', 'ap[_-]?plus|(?:^|[_-])app(?:[-_.]|$)/.test(icons)')
+    .replace('fc[_-]?plus/.test(icons)', 'fc[_-]?plus|(?:^|[_-])cfp(?:[-_.]|$)/.test(icons)')
+    .replace('fsdx/.test(icons)', 'fsdx|lampfdx|(?:^|[_-])fdx(?:[-_.]|$)/.test(icons)')
+    .replace('(?:^|[_-])fs(?:[-_.]|$)/.test(icons)', '(?:^|[_-])fs(?:[-_.]|$)|lampfs/.test(icons)')
     .replace(
       'achievements=number(q(".music_score_block.w_120")?.textContent||q(".music_score_block")?.textContent),dxScore=number(q(".music_dx_score_block")?.textContent||q(".dx_score_block")?.textContent)',
       'blocks=Array.from(row.querySelectorAll?.(".music_score_block")||[]),achievements=number(blocks.find(b=>String(b.textContent||"").includes("%"))?.textContent||q(".music_score_block.w_120")?.textContent||q(".music_score_block")?.textContent),dxScore=number(q(".music_dx_score_block")?.textContent||q(".dx_score_block")?.textContent||blocks.find(b=>!String(b.textContent||"").includes("%"))?.textContent)'
