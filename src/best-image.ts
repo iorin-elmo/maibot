@@ -321,7 +321,7 @@ export async function renderSyncSummaryImage(summary: SyncSummary): Promise<Buff
   if (!groups.length) {
     context.fillStyle = "#f8f5ff";
     context.font = `bold 22px ${FONT_NAME}, monospace`;
-    context.fillText("今回の更新はありません。", gutter, headerHeight + 35);
+    context.fillText("ランク・☆・ランプの更新はありません。", gutter, headerHeight + 35);
   }
   return canvas.toBuffer("image/jpeg", 92);
 }
