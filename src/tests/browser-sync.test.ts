@@ -382,7 +382,7 @@ test("生成した無料同期スクリプトは全難易度を収集し、異�
       },
       querySelectorAll: (selector: string) => selector === ".music_score_block"
         ? [{ textContent: `${achievements}%` }, { textContent: `DX SCORE ${dxScore} / 2193` }]
-        : selector === "img" ? [{ getAttribute: () => "music_icon_all_perfect_plus.png" }, { getAttribute: () => "music_icon_full_sync_dx.png" }]
+        : selector === "*" ? [{ getAttribute: () => "music_icon_all_perfect_plus.png" }, { getAttribute: () => "music_icon_full_sync_dx.png" }]
           : []
     });
     const scorePage = {
