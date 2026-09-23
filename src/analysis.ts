@@ -157,6 +157,7 @@ export function validateProfile(value: unknown): ImportedProfile {
   if (typeof profile.playerName !== "string" || !profile.playerName.trim()) {
     throw new Error("playerName は空でない文字列にしてください。");
   }
+  if (profile.playerName.trim().length > 100) throw new Error("playerName は100文字以内にしてください。");
   if (!Number.isFinite(profile.rating)) throw new Error("rating は数値にしてください。");
   if (!Array.isArray(profile.scores)) throw new Error("scores は配列にしてください。");
   // Free-course sync collects all played charts before the server selects Best

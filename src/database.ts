@@ -19,6 +19,7 @@ export interface PendingSyncNotification {
 }
 
 const MAX_SYNC_NOTIFICATION_DELIVERY_ATTEMPTS = 5;
+const DEAD_SYNC_NOTIFICATION_RETENTION_MS = 30 * 24 * 60 * 60_000;
 
 export class BotDatabase {
   private readonly db: DatabaseSync;
@@ -87,6 +88,7 @@ export class BotDatabase {
     try { this.db.exec("ALTER TABLE import_tokens ADD COLUMN notification_channel_id TEXT"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE import_tokens ADD COLUMN notification_image INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE sync_notifications ADD COLUMN delivery_attempts INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
+    this.db.prepare("DELETE FROM dead_sync_notifications WHERE discarded_at < ?").run(Date.now() - DEAD_SYNC_NOTIFICATION_RETENTION_MS);
   }
 
   link(discordUserId: string, segaId: string): void {
