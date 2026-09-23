@@ -13,8 +13,13 @@ export type SyncResultNotifier = (recipient: ImportTokenRecipient, summary: Retu
 
 async function deliverPendingSyncNotifications(db: BotDatabase, notify: SyncResultNotifier, discordUserId?: string): Promise<void> {
   for (const pending of db.getPendingSyncNotifications(discordUserId)) {
-    await notify(pending.recipient, pending.summary);
-    db.deletePendingSyncNotification(pending.id);
+    try {
+      await notify(pending.recipient, pending.summary);
+      db.deletePendingSyncNotification(pending.id);
+    } catch (error) {
+      if (db.recordSyncNotificationFailure(pending.id)) throw error;
+      console.warn(`Discarded sync notification ${pending.id} after repeated delivery failures`, error);
+    }
   }
 }
 

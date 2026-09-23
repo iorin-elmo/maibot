@@ -7,6 +7,7 @@ import test from "node:test";
 import { makeFreeBookmarklet, makePremiumBookmarklet, startBrowserSyncServer } from "../browser-sync.js";
 import type { MaimaiCatalog } from "../catalog.js";
 import { BotDatabase } from "../database.js";
+import { createSyncSummary } from "../sync-summary.js";
 
 async function unusedPort(): Promise<number> {
   const server = createServer();
@@ -154,6 +155,37 @@ test("sync notifications for one user are delivered in import order", async () =
     assert.equal((await first).status, 200);
     assert.equal((await second).status, 200);
     assert.deepEqual(delivered, ["First", "Second"]);
+  } finally {
+    stop();
+    db.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a dead-lettered notification does not block later notifications", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "maibot-sync-dead-letter-"));
+  const db = new BotDatabase(join(directory, "test.sqlite"));
+  const firstSummary = createSyncSummary(undefined, [], "First", 1000, []);
+  const secondSummary = createSyncSummary(undefined, [], "Second", 1000, []);
+  const recipient = { discordUserId: "discord-user", notificationChannelId: "channel-id", wantsImage: false };
+  db.createImportToken(recipient.discordUserId);
+  db.queueSyncNotification(recipient, firstSummary);
+  db.queueSyncNotification(recipient, secondSummary);
+  const first = db.getPendingSyncNotifications()[0];
+  for (let attempt = 0; attempt < 4; attempt += 1) assert.equal(db.recordSyncNotificationFailure(first.id), true);
+
+  const port = await unusedPort();
+  const origin = `http://127.0.0.1:${port}`;
+  const delivered: string[] = [];
+  const stop = startBrowserSyncServer(origin, "127.0.0.1", port, db, { enrich: async (scores: unknown[]) => scores } as unknown as MaimaiCatalog,
+    async (_recipient, summary) => {
+      if (summary.playerName === "First") throw new Error("deleted channel");
+      delivered.push(summary.playerName);
+    });
+  try {
+    for (let attempt = 0; attempt < 10 && (!delivered.length || db.getPendingSyncNotifications().length); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual(delivered, ["Second"]);
+    assert.equal(db.getPendingSyncNotifications().length, 0);
   } finally {
     stop();
     db.close();

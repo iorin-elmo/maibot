@@ -15,7 +15,10 @@ export interface PendingSyncNotification {
   id: number;
   recipient: ImportTokenRecipient;
   summary: SyncSummary;
+  deliveryAttempts: number;
 }
+
+const MAX_SYNC_NOTIFICATION_DELIVERY_ATTEMPTS = 5;
 
 export class BotDatabase {
   private readonly db: DatabaseSync;
@@ -61,7 +64,17 @@ export class BotDatabase {
         discord_user_id TEXT NOT NULL REFERENCES accounts(discord_user_id) ON DELETE CASCADE,
         channel_id TEXT NOT NULL,
         wants_image INTEGER NOT NULL DEFAULT 0,
-        summary_json TEXT NOT NULL
+        summary_json TEXT NOT NULL,
+        delivery_attempts INTEGER NOT NULL DEFAULT 0
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS dead_sync_notifications (
+        id INTEGER PRIMARY KEY,
+        discord_user_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        wants_image INTEGER NOT NULL,
+        summary_json TEXT NOT NULL,
+        delivery_attempts INTEGER NOT NULL,
+        discarded_at INTEGER NOT NULL
       ) STRICT;
       CREATE INDEX IF NOT EXISTS scores_by_rating ON scores(discord_user_id, chart_kind, rating DESC);
     `);
@@ -73,6 +86,7 @@ export class BotDatabase {
     try { this.db.exec("ALTER TABLE scores ADD COLUMN sync_status TEXT CHECK(sync_status IN ('FDX', 'FS'))"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE import_tokens ADD COLUMN notification_channel_id TEXT"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE import_tokens ADD COLUMN notification_image INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
+    try { this.db.exec("ALTER TABLE sync_notifications ADD COLUMN delivery_attempts INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
   }
 
   link(discordUserId: string, segaId: string): void {
@@ -142,22 +156,50 @@ export class BotDatabase {
   getPendingSyncNotifications(discordUserId?: string): PendingSyncNotification[] {
     const statement = discordUserId
       ? this.db.prepare(`SELECT id, discord_user_id AS discordUserId, channel_id AS channelId,
-          wants_image AS wantsImage, summary_json AS summaryJson FROM sync_notifications
+          wants_image AS wantsImage, summary_json AS summaryJson, delivery_attempts AS deliveryAttempts FROM sync_notifications
           WHERE discord_user_id = ? ORDER BY id`)
       : this.db.prepare(`SELECT id, discord_user_id AS discordUserId, channel_id AS channelId,
-          wants_image AS wantsImage, summary_json AS summaryJson FROM sync_notifications ORDER BY id`);
+          wants_image AS wantsImage, summary_json AS summaryJson, delivery_attempts AS deliveryAttempts FROM sync_notifications ORDER BY id`);
     const rows = (discordUserId ? statement.all(discordUserId) : statement.all()) as Array<{
-      id: number; discordUserId: string; channelId: string; wantsImage: number; summaryJson: string;
+      id: number; discordUserId: string; channelId: string; wantsImage: number; summaryJson: string; deliveryAttempts: number;
     }>;
     return rows.map((row) => ({
       id: row.id,
       recipient: { discordUserId: row.discordUserId, notificationChannelId: row.channelId, wantsImage: row.wantsImage === 1 },
-      summary: JSON.parse(row.summaryJson) as SyncSummary
+      summary: JSON.parse(row.summaryJson) as SyncSummary,
+      deliveryAttempts: row.deliveryAttempts
     }));
   }
 
   deletePendingSyncNotification(id: number): void {
     this.db.prepare("DELETE FROM sync_notifications WHERE id = ?").run(id);
+  }
+
+  recordSyncNotificationFailure(id: number): boolean {
+    const notification = this.db.prepare(`SELECT discord_user_id AS discordUserId, channel_id AS channelId,
+      wants_image AS wantsImage, summary_json AS summaryJson, delivery_attempts AS deliveryAttempts
+      FROM sync_notifications WHERE id = ?`).get(id) as {
+        discordUserId: string; channelId: string; wantsImage: number; summaryJson: string; deliveryAttempts: number;
+      } | undefined;
+    if (!notification) return false;
+    const deliveryAttempts = notification.deliveryAttempts + 1;
+    if (deliveryAttempts < MAX_SYNC_NOTIFICATION_DELIVERY_ATTEMPTS) {
+      this.db.prepare("UPDATE sync_notifications SET delivery_attempts = ? WHERE id = ?").run(deliveryAttempts, id);
+      return true;
+    }
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.prepare(`INSERT INTO dead_sync_notifications
+        (discord_user_id, channel_id, wants_image, summary_json, delivery_attempts, discarded_at)
+        VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(notification.discordUserId, notification.channelId, notification.wantsImage, notification.summaryJson, deliveryAttempts, Date.now());
+      this.db.prepare("DELETE FROM sync_notifications WHERE id = ?").run(id);
+      this.db.exec("COMMIT");
+      return false;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   importProfile(discordUserId: string, profile: ImportedProfile): void {
