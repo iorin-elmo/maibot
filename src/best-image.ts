@@ -9,8 +9,17 @@ const FONT_NAME = "MaiBotMono";
 const COVER_BASE_URL = "https://shama.dxrating.net/images/cover/v2";
 const coverCache = new Map<string, Promise<Awaited<ReturnType<typeof loadImage>> | undefined>>();
 
-if (process.platform === "win32" && existsSync("C:\\Windows\\Fonts\\msgothic.ttc")) {
-  GlobalFonts.registerFromPath("C:\\Windows\\Fonts\\msgothic.ttc", FONT_NAME);
+// Canvas does not reliably discover CJK fallback fonts on headless Linux.
+// Register a known Japanese-capable font explicitly on every supported host.
+const fontPaths = process.platform === "win32"
+  ? ["C:\\Windows\\Fonts\\msgothic.ttc"]
+  : [
+      "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+      "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf"
+    ];
+const fontPath = fontPaths.find(existsSync);
+if (fontPath) {
+  GlobalFonts.registerFromPath(fontPath, FONT_NAME);
 }
 
 interface CardItem {
