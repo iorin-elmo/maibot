@@ -103,6 +103,13 @@ test("an FDX-only improvement appears in the lamp updates", () => {
   assert.match(fields.find((field) => field.name === "ランプ更新")?.value ?? "", /FS → FDX/);
 });
 
+test("an FS-only improvement is counted in the summary", () => {
+  const previous = [{ title: "FS", difficulty: "MASTER", level: "14", achievements: 100, rating: 300, chartKind: "new" as const, chartType: "dx" as const }];
+  const current = [{ ...previous[0], syncStatus: "FS" as const }];
+  const summary = createSyncSummary(account, previous, "Player", 1000, current);
+  assert.equal(summary.newFsCount, 1);
+});
+
 test("lamp updates prioritize FDX over FS before chart difficulty", () => {
   const previous = [
     { title: "FS", difficulty: "MASTER", level: "15", achievements: 100, rating: 300, chartKind: "new" as const, chartType: "dx" as const },

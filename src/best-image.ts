@@ -307,7 +307,7 @@ export async function renderSyncSummaryImage(summary: SyncSummary): Promise<Buff
   } else {
     context.fillText(`スコア新記録: ${summary.scoreRecordCount}曲  ランク更新: ${summary.rankUpdateCount}曲`, gutter, 94);
     context.fillText(`DXスコア新記録: ${summary.dxScoreRecordCount}曲  ☆更新: ${summary.starUpdateCount}曲`, gutter, 118);
-    context.fillText(`AP+ +${summary.newApPlusCount}曲 / AP +${summary.newApCount}曲 / FC+ +${summary.newFcPlusCount}曲 / FC +${summary.newFcCount}曲 / FDX +${summary.newFdxCount}曲`, gutter, 142);
+    context.fillText(`AP+ +${summary.newApPlusCount}曲 / AP +${summary.newApCount}曲 / FC+ +${summary.newFcPlusCount}曲 / FC +${summary.newFcCount}曲 / FS +${summary.newFsCount}曲 / FDX +${summary.newFdxCount}曲`, gutter, 142);
   }
   let y = headerHeight;
   for (const group of groups) {

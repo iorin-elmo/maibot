@@ -32,6 +32,7 @@ export interface SyncSummary {
   newApCount: number;
   newFcPlusCount: number;
   newFcCount: number;
+  newFsCount: number;
   newFdxCount: number;
   rankUpdates: SyncChartUpdate[];
   starUpdates: SyncChartUpdate[];
@@ -130,6 +131,7 @@ export function createSyncSummary(previousAccount: LinkedAccount | undefined, pr
     dxScoreRecordCount: updates.filter((update) => update.dxScoreGain !== undefined).length,
     rankUpdateCount: allRankUpdates.length, starUpdateCount: allStarUpdates.length,
     newApPlusCount: newly("AP+"), newApCount: newly("AP"), newFcPlusCount: newly("FC+"), newFcCount: newly("FC"),
+    newFsCount: updates.filter((update) => update.syncImproved && update.score.syncStatus === "FS").length,
     newFdxCount: updates.filter((update) => update.syncImproved && update.score.syncStatus === "FDX").length,
     rankUpdates, starUpdates, lampUpdates
   };
@@ -181,7 +183,7 @@ export function syncSummaryEmbed(summary: SyncSummary): EmbedBuilder {
     .setTitle(`${summary.playerName} の同期結果`)
     .setDescription(`Rating: ${rating}`)
     .addFields(
-      { name: "更新サマリー", value: `スコア新記録: ${summary.scoreRecordCount}曲 / ランク更新: ${summary.rankUpdateCount}曲\nDXスコア新記録: ${summary.dxScoreRecordCount}曲 / ☆更新: ${summary.starUpdateCount}曲\nAP+ +${summary.newApPlusCount}曲 / AP +${summary.newApCount}曲 / FC+ +${summary.newFcPlusCount}曲 / FC +${summary.newFcCount}曲 / FDX +${summary.newFdxCount}曲` },
+      { name: "更新サマリー", value: `スコア新記録: ${summary.scoreRecordCount}曲 / ランク更新: ${summary.rankUpdateCount}曲\nDXスコア新記録: ${summary.dxScoreRecordCount}曲 / ☆更新: ${summary.starUpdateCount}曲\nAP+ +${summary.newApPlusCount}曲 / AP +${summary.newApCount}曲 / FC+ +${summary.newFcPlusCount}曲 / FC +${summary.newFcCount}曲 / FS +${summary.newFsCount}曲 / FDX +${summary.newFdxCount}曲` },
       updateField("ランク更新", summary.rankUpdates, formatRankUpdate),
       updateField("☆更新", summary.starUpdates, formatStarUpdate),
       updateField("ランプ更新", summary.lampUpdates, formatLampUpdate)

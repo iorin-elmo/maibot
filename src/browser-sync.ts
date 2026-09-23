@@ -9,6 +9,7 @@ interface BrowserScore { title: string; difficulty: string; level?: string; achi
 interface BrowserPayload { playerName: string; rating: number; scores: BrowserScore[]; }
 
 const importQueues = new Map<string, Promise<void>>();
+const notificationQueues = new Map<string, Promise<void>>();
 export type SyncResultNotifier = (recipient: ImportTokenRecipient, summary: ReturnType<typeof createSyncSummary>) => Promise<void>;
 
 async function deliverPendingSyncNotifications(db: BotDatabase, notify: SyncResultNotifier, discordUserId?: string): Promise<void> {
@@ -25,7 +26,17 @@ async function deliverPendingSyncNotifications(db: BotDatabase, notify: SyncResu
 
 async function retryPendingSyncNotifications(db: BotDatabase, notify: SyncResultNotifier): Promise<void> {
   const userIds = new Set(db.getPendingSyncNotifications().map((pending) => pending.recipient.discordUserId));
-  await Promise.all([...userIds].map((discordUserId) => serializeImport(discordUserId, () => deliverPendingSyncNotifications(db, notify, discordUserId))));
+  await Promise.all([...userIds].map((discordUserId) => queuePendingSyncNotificationDelivery(db, notify, discordUserId)));
+}
+
+function queuePendingSyncNotificationDelivery(db: BotDatabase, notify: SyncResultNotifier, discordUserId: string): Promise<void> {
+  const previous = notificationQueues.get(discordUserId) ?? Promise.resolve();
+  const result = previous.catch(() => undefined).then(() => deliverPendingSyncNotifications(db, notify, discordUserId));
+  const tail = result.then(() => undefined, () => undefined);
+  notificationQueues.set(discordUserId, tail);
+  return result.finally(() => {
+    if (notificationQueues.get(discordUserId) === tail) notificationQueues.delete(discordUserId);
+  });
 }
 
 const corsHeaders = {
@@ -205,12 +216,10 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
       db.importProfileWithSyncNotification(discordUserId, { ...profile, scores }, recipient.notificationChannelId ? { recipient, summary } : undefined);
       if (recipient.notificationChannelId) {
         if (notify) {
-          try {
-            await deliverPendingSyncNotifications(db, notify, discordUserId);
-          } catch (error) {
+          void queuePendingSyncNotificationDelivery(db, notify, discordUserId).catch((error) => {
             // Keep the outbox row so a future sync or bot restart can retry it.
             console.warn(`Sync notification failed for ${discordUserId}`, error);
-          }
+          });
         }
       }
       return { count: parsedProfile.scores.length, summary };
