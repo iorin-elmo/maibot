@@ -64,7 +64,10 @@ test("an ambiguous legacy chart is not matched to both DX and Standard charts", 
     { ...previous[0], chartType: "standard" as const }
   ];
   const summary = createSyncSummary(account, previous, "Player", 1000, current);
-  assert.ok(summary.updates.every((update) => update.previous === undefined));
+  assert.equal(summary.updates.length, 0);
+  assert.equal(summary.scoreRecordCount, 0);
+  assert.equal(summary.rankUpdateCount, 0);
+  assert.equal(summary.lampUpdates.length, 0);
 });
 
 test("unknown prior DX-star data does not create a false star update", () => {

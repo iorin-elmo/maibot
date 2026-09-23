@@ -87,11 +87,15 @@ export function createSyncSummary(previousAccount: LinkedAccount | undefined, pr
   const initial = previousScores.length === 0;
   const updates = scores.flatMap((score): SyncChartUpdate[] => {
     const legacyKey = scoreKey(score, false);
+    const hasAmbiguousLegacyMatch = score.chartType !== undefined
+      && currentChartCounts.get(legacyKey) !== 1
+      && legacyPreviousByKey.has(legacyKey);
     // Before chart type was stored, a DX and Standard chart could not be
     // distinguished. Fall back only when the incoming snapshot has one chart
     // for that title/difficulty/level, so distinct charts are never conflated.
     const previous = previousByKey.get(scoreKey(score))
       ?? (score.chartType !== undefined && currentChartCounts.get(legacyKey) === 1 ? legacyPreviousByKey.get(legacyKey) : undefined);
+    if (previous === undefined && hasAmbiguousLegacyMatch) return [];
     const achievementGain = numericGain(score.achievements, previous?.achievements);
     const dxScoreGain = numericGain(score.dxScore, previous?.dxScore);
     const rankChanged = achievementGain !== undefined && achievementRank(score.achievements) !== achievementRank(previous?.achievements);
