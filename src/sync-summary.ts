@@ -38,9 +38,9 @@ export interface SyncSummary {
   lampUpdates: SyncChartUpdate[];
 }
 
-function scoreKey(score: ScoreRecord): string {
+function scoreKey(score: ScoreRecord, includeChartType = true): string {
   const difficulty = score.difficulty.normalize("NFKC").replace(/:/g, "").toUpperCase();
-  return [score.title.normalize("NFKC"), difficulty, score.level?.normalize("NFKC") ?? "", score.chartType ?? ""].join("\u0000");
+  return [score.title.normalize("NFKC"), difficulty, score.level?.normalize("NFKC") ?? "", includeChartType ? score.chartType ?? "" : ""].join("\u0000");
 }
 
 function numericGain(current: number | undefined, previous: number | undefined): number | undefined {
@@ -49,8 +49,12 @@ function numericGain(current: number | undefined, previous: number | undefined):
   return gain > 0 ? gain : undefined;
 }
 
-function starOf(score: ScoreRecord | undefined): number {
-  return score ? dxStar(score) ?? 0 : 0;
+function starOf(score: ScoreRecord | undefined): number | undefined {
+  return score ? dxStar(score) : undefined;
+}
+
+function formatStar(score: ScoreRecord | undefined): string {
+  return String(starOf(score) ?? "-");
 }
 
 function statusUpgraded<T extends keyof typeof comboOrder | keyof typeof syncOrder>(
@@ -74,23 +78,36 @@ function limitForDisplay(updates: SyncChartUpdate[]): SyncChartUpdate[] {
 
 export function createSyncSummary(previousAccount: LinkedAccount | undefined, previousScores: ScoreRecord[], playerName: string, rating: number, scores: ScoreRecord[]): SyncSummary {
   const previousByKey = new Map(previousScores.map((score) => [scoreKey(score), score]));
+  const legacyPreviousByKey = new Map(previousScores.filter((score) => score.chartType === undefined).map((score) => [scoreKey(score, false), score]));
+  const currentChartCounts = new Map<string, number>();
+  for (const score of scores) {
+    const key = scoreKey(score, false);
+    currentChartCounts.set(key, (currentChartCounts.get(key) ?? 0) + 1);
+  }
   const initial = previousScores.length === 0;
   const updates = scores.flatMap((score): SyncChartUpdate[] => {
-    const previous = previousByKey.get(scoreKey(score));
+    const legacyKey = scoreKey(score, false);
+    // Before chart type was stored, a DX and Standard chart could not be
+    // distinguished. Fall back only when the incoming snapshot has one chart
+    // for that title/difficulty/level, so distinct charts are never conflated.
+    const previous = previousByKey.get(scoreKey(score))
+      ?? (score.chartType !== undefined && currentChartCounts.get(legacyKey) === 1 ? legacyPreviousByKey.get(legacyKey) : undefined);
     const achievementGain = numericGain(score.achievements, previous?.achievements);
     const dxScoreGain = numericGain(score.dxScore, previous?.dxScore);
     const rankChanged = achievementRank(score.achievements) !== achievementRank(previous?.achievements);
-    const starChanged = starOf(score) > starOf(previous);
+    const currentStar = starOf(score);
+    const previousStar = starOf(previous);
+    const starChanged = currentStar !== undefined && previousStar !== undefined && currentStar > previousStar;
     const comboImproved = statusUpgraded(score.comboStatus, previous?.comboStatus, comboOrder);
     const syncImproved = statusUpgraded(score.syncStatus, previous?.syncStatus, syncOrder);
-    if (initial || (!achievementGain && !dxScoreGain && !comboImproved && !syncImproved)) return [];
+    if (initial || (!achievementGain && !dxScoreGain && !starChanged && !comboImproved && !syncImproved)) return [];
     return [{ score, previous, achievementGain, dxScoreGain, rankChanged, starChanged, comboImproved, syncImproved }];
   });
   const byRating = (left: SyncChartUpdate, right: SyncChartUpdate) => right.score.rating - left.score.rating
     || (right.score.achievements ?? 0) - (left.score.achievements ?? 0) || left.score.title.localeCompare(right.score.title, "ja");
   const allRankUpdates = updates.filter((update) => update.rankChanged).sort(byRating);
   const allStarUpdates = updates.filter((update) => update.starChanged)
-    .sort((left, right) => starOf(right.score) - starOf(left.score)
+    .sort((left, right) => (starOf(right.score) ?? -1) - (starOf(left.score) ?? -1)
       || compareDifficulty(left.score, right.score) || (right.dxScoreGain ?? 0) - (left.dxScoreGain ?? 0));
   const allLampUpdates = updates.filter((update) => update.comboImproved)
     .sort((left, right) => comboOrder[right.score.comboStatus ?? "undefined"] - comboOrder[left.score.comboStatus ?? "undefined"]
@@ -126,7 +143,7 @@ function formatRankUpdate(update: SyncChartUpdate): string {
 
 function formatStarUpdate(update: SyncChartUpdate): string {
   const { score, previous } = update;
-  return `**${shortTitle(score.title)}**\nLv.${score.level ?? "?"} / ${previous?.dxScore ?? 0} → ${score.dxScore ?? 0} (+${update.dxScoreGain ?? 0})/${score.dxScoreMax ?? "?"} ☆${starOf(previous)}→${starOf(score)}`;
+  return `**${shortTitle(score.title)}**\nLv.${score.level ?? "?"} / ${previous?.dxScore ?? 0} → ${score.dxScore ?? 0} (+${update.dxScoreGain ?? 0})/${score.dxScoreMax ?? "?"} ☆${formatStar(previous)}→${formatStar(score)}`;
 }
 
 function formatLampUpdate(update: SyncChartUpdate): string {

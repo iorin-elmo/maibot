@@ -49,3 +49,35 @@ test("later sync ignores score regressions and unchanged charts", () => {
   const summary = createSyncSummary(account, previous, "Player", 1000, current);
   assert.equal(summary.updates.length, 0);
 });
+
+test("a legacy untyped chart is matched to one newly typed chart", () => {
+  const previous = [{ title: "Legacy", difficulty: "MASTER", level: "14", achievements: 100, dxScore: 2000, dxScoreMax: 2100, rating: 300, chartKind: "new" as const }];
+  const current = [{ ...previous[0], chartType: "dx" as const }];
+  const summary = createSyncSummary(account, previous, "Player", 1000, current);
+  assert.equal(summary.updates.length, 0);
+});
+
+test("an ambiguous legacy chart is not matched to both DX and Standard charts", () => {
+  const previous = [{ title: "Legacy", difficulty: "MASTER", level: "14", achievements: 100, rating: 300, chartKind: "new" as const }];
+  const current = [
+    { ...previous[0], chartType: "dx" as const },
+    { ...previous[0], chartType: "standard" as const }
+  ];
+  const summary = createSyncSummary(account, previous, "Player", 1000, current);
+  assert.ok(summary.updates.every((update) => update.previous === undefined));
+});
+
+test("unknown prior DX-star data does not create a false star update", () => {
+  const previous = [{ title: "No DX", difficulty: "MASTER", level: "14", achievements: 100, rating: 300, chartKind: "new" as const, chartType: "dx" as const }];
+  const current = [{ ...previous[0], dxScore: 2100, dxScoreMax: 2100 }];
+  const summary = createSyncSummary(account, previous, "Player", 1000, current);
+  assert.equal(summary.starUpdateCount, 0);
+});
+
+test("a star change is retained even when the DX point total is unchanged", () => {
+  const previous = [{ title: "Recalculated", difficulty: "MASTER", level: "14", achievements: 100, dxScore: 950, dxScoreMax: 1000, rating: 300, chartKind: "new" as const, chartType: "dx" as const }];
+  const current = [{ ...previous[0], dxScoreMax: 970 }];
+  const summary = createSyncSummary(account, previous, "Player", 1000, current);
+  assert.equal(summary.starUpdateCount, 1);
+  assert.equal(summary.updates.length, 1);
+});

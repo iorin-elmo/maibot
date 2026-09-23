@@ -7,6 +7,7 @@ import test from "node:test";
 import { makeFreeBookmarklet, makePremiumBookmarklet, startBrowserSyncServer } from "../browser-sync.js";
 import type { MaimaiCatalog } from "../catalog.js";
 import { BotDatabase } from "../database.js";
+import { registerSyncNotification } from "../sync-notification.js";
 
 async function unusedPort(): Promise<number> {
   const server = createServer();
@@ -64,6 +65,38 @@ test("Standardコース同期用ブックマークレットもDiscord本文に�
   assert.ok(bookmarklet.includes("div.w_450.m_15,div.screw_block"));
   assert.ok(!bookmarklet.includes("i<15"));
   assert.ok(bookmarklet.length < 4_000);
+});
+
+test("browser sync notifies only after a successful import", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "maibot-sync-notification-"));
+  const db = new BotDatabase(join(directory, "test.sqlite"));
+  const port = await unusedPort();
+  const origin = `http://127.0.0.1:${port}`;
+  const stop = startBrowserSyncServer(origin, "127.0.0.1", port, db, { enrich: async (scores: unknown[]) => scores } as unknown as MaimaiCatalog);
+  const payload = { playerName: "Player", rating: 1000, scores: [{ title: "Song", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "unknown", chartType: "dx" }] };
+  try {
+    const successfulToken = db.createImportToken("discord-user");
+    let delivered = false;
+    registerSyncNotification(successfulToken, (summary) => {
+      delivered = true;
+      assert.equal(summary.initial, true);
+      assert.equal(summary.playerName, "Player");
+    });
+    const successful = await postWithRetry(`${origin}/v1/browser-sync`, successfulToken, payload);
+    assert.equal(successful.status, 200);
+    assert.equal(delivered, true);
+
+    const failedToken = db.createImportToken("discord-user");
+    let failedNotificationDelivered = false;
+    registerSyncNotification(failedToken, () => { failedNotificationDelivered = true; });
+    const failed = await postWithRetry(`${origin}/v1/browser-sync`, failedToken, { ...payload, scores: [] });
+    assert.equal(failed.status, 400);
+    assert.equal(failedNotificationDelivered, false);
+  } finally {
+    stop();
+    db.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("Standard bookmarklet assigns ranks within the page's new and old sections", async () => {
