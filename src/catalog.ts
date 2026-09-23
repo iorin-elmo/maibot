@@ -7,6 +7,7 @@ interface CatalogSheet {
   level: string;
   internalLevelValue: number;
   noteCounts?: { total?: number };
+  serverIds?: string[];
   /** The version in which this particular chart was added. */
   version?: string;
 }
@@ -107,8 +108,12 @@ export class MaimaiCatalog {
       const charts: CatalogChart[] = [];
       const lockedTitles = new Set<string>();
       for (const song of document.songs) {
-        if (song.isLocked) { lockedTitles.add(normalize(song.title)); continue; }
+        if (song.isLocked || song.sheets.every((sheet) => !sheet.serverIds?.includes("jp"))) {
+          lockedTitles.add(normalize(song.title));
+          continue;
+        }
         for (const sheet of song.sheets ?? []) {
+        if (!sheet.serverIds?.includes("jp")) continue;
         // UTAGE charts (including two-player variants) are not part of the
         // new-song rating frame and must not appear in its constant ranking.
         if (sheet.type !== "dx" && sheet.type !== "std") continue;
