@@ -94,7 +94,7 @@ export function createSyncSummary(previousAccount: LinkedAccount | undefined, pr
       ?? (score.chartType !== undefined && currentChartCounts.get(legacyKey) === 1 ? legacyPreviousByKey.get(legacyKey) : undefined);
     const achievementGain = numericGain(score.achievements, previous?.achievements);
     const dxScoreGain = numericGain(score.dxScore, previous?.dxScore);
-    const rankChanged = achievementRank(score.achievements) !== achievementRank(previous?.achievements);
+    const rankChanged = achievementGain !== undefined && achievementRank(score.achievements) !== achievementRank(previous?.achievements);
     const currentStar = starOf(score);
     const previousStar = starOf(previous);
     const starChanged = currentStar !== undefined && previousStar !== undefined && currentStar > previousStar;
@@ -109,7 +109,7 @@ export function createSyncSummary(previousAccount: LinkedAccount | undefined, pr
   const allStarUpdates = updates.filter((update) => update.starChanged)
     .sort((left, right) => (starOf(right.score) ?? -1) - (starOf(left.score) ?? -1)
       || compareDifficulty(left.score, right.score) || (right.dxScoreGain ?? 0) - (left.dxScoreGain ?? 0));
-  const allLampUpdates = updates.filter((update) => update.comboImproved)
+  const allLampUpdates = updates.filter((update) => update.comboImproved || update.syncImproved)
     .sort((left, right) => comboOrder[right.score.comboStatus ?? "undefined"] - comboOrder[left.score.comboStatus ?? "undefined"]
       || compareDifficulty(left.score, right.score) || (right.score.achievements ?? 0) - (left.score.achievements ?? 0));
   const rankUpdates = limitForDisplay(allRankUpdates);
@@ -148,7 +148,11 @@ function formatStarUpdate(update: SyncChartUpdate): string {
 
 function formatLampUpdate(update: SyncChartUpdate): string {
   const { score, previous } = update;
-  return `**${shortTitle(score.title)}**\n${score.comboStatus ?? "-"} / ${formatAchievement(previous?.achievements)} → ${formatAchievement(score.achievements)} (+${update.achievementGain?.toFixed(4) ?? "0.0000"}%) / ${previous?.comboStatus ?? "-"} → ${score.comboStatus ?? "-"}`;
+  const transitions = [
+    update.comboImproved ? `${previous?.comboStatus ?? "-"} → ${score.comboStatus ?? "-"}` : undefined,
+    update.syncImproved ? `${previous?.syncStatus ?? "-"} → ${score.syncStatus ?? "-"}` : undefined
+  ].filter((transition): transition is string => transition !== undefined).join(" / ");
+  return `**${shortTitle(score.title)}**\n${score.comboStatus ?? "-"} / ${formatAchievement(previous?.achievements)} → ${formatAchievement(score.achievements)} (+${update.achievementGain?.toFixed(4) ?? "0.0000"}%) / ${transitions}`;
 }
 
 function updateField(name: string, updates: SyncChartUpdate[], format: (update: SyncChartUpdate) => string): { name: string; value: string } {

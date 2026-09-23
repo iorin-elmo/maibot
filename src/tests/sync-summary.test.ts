@@ -81,3 +81,21 @@ test("a star change is retained even when the DX point total is unchanged", () =
   assert.equal(summary.starUpdateCount, 1);
   assert.equal(summary.updates.length, 1);
 });
+
+test("a score regression is not reported as a rank update when the lamp improves", () => {
+  const previous = [{ title: "Lamp", difficulty: "MASTER", level: "14", achievements: 100, comboStatus: "FC" as const, rating: 300, chartKind: "new" as const, chartType: "dx" as const }];
+  const current = [{ ...previous[0], achievements: 99.5, comboStatus: "AP" as const }];
+  const summary = createSyncSummary(account, previous, "Player", 1000, current);
+  assert.equal(summary.updates.length, 1);
+  assert.equal(summary.rankUpdateCount, 0);
+  assert.equal(summary.lampUpdates.length, 1);
+});
+
+test("an FDX-only improvement appears in the lamp updates", () => {
+  const previous = [{ title: "Sync", difficulty: "MASTER", level: "14", achievements: 100, syncStatus: "FS" as const, rating: 300, chartKind: "new" as const, chartType: "dx" as const }];
+  const current = [{ ...previous[0], syncStatus: "FDX" as const }];
+  const summary = createSyncSummary(account, previous, "Player", 1000, current);
+  assert.equal(summary.lampUpdates.length, 1);
+  const fields = syncSummaryEmbed(summary).toJSON().fields ?? [];
+  assert.match(fields.find((field) => field.name === "ランプ更新")?.value ?? "", /FS → FDX/);
+});

@@ -218,7 +218,7 @@ function starOf(score: ScoreRecord | undefined): number {
 }
 
 function syncImageItems(kind: "rank" | "star" | "lamp", updates: SyncChartUpdate[]): SyncImageItem[] {
-  return updates.map(({ score, previous, achievementGain, dxScoreGain }) => {
+  return updates.map(({ score, previous, achievementGain, dxScoreGain, comboImproved, syncImproved }) => {
     if (kind === "rank") return {
       score, topLeft: achievementRank(previous?.achievements), topRight: `${achievementRank(score.achievements)} ${score.rating}`,
       detail: `${formatAchievement(previous?.achievements)} → ${formatAchievement(score.achievements)} (+${achievementGain?.toFixed(4) ?? "0.0000"}%)`
@@ -227,8 +227,10 @@ function syncImageItems(kind: "rank" | "star" | "lamp", updates: SyncChartUpdate
       score, topLeft: `Lv.${score.level ?? "?"}`, topRight: `☆${starOf(previous)}→${starOf(score)}`,
       detail: `${previous?.dxScore ?? 0} → ${score.dxScore ?? 0} (+${dxScoreGain ?? 0})/${score.dxScoreMax ?? "?"}`
     };
+    const previousLamp = comboImproved ? previous?.comboStatus ?? "-" : previous?.syncStatus ?? "-";
+    const currentLamp = comboImproved ? score.comboStatus ?? "-" : score.syncStatus ?? "-";
     return {
-      score, topLeft: previous?.comboStatus ?? "-", topRight: score.comboStatus ?? "-",
+      score, topLeft: previousLamp, topRight: currentLamp,
       detail: `${formatAchievement(previous?.achievements)} → ${formatAchievement(score.achievements)} (+${achievementGain?.toFixed(4) ?? "0.0000"}%)`
     };
   });
