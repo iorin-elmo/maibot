@@ -119,7 +119,9 @@ export function createSyncSummary(previousAccount: LinkedAccount | undefined, pr
   const rankUpdates = limitForDisplay(allRankUpdates);
   const starUpdates = limitForDisplay(allStarUpdates);
   const lampUpdates = limitForDisplay(allLampUpdates);
-  const newly = (status: ScoreRecord["comboStatus"]) => updates.filter((update) => update.score.comboStatus === status && update.previous?.comboStatus !== status).length;
+  // A score may improve while its reported lamp is lower than the old one.
+  // Count only actual lamp upgrades, rather than any different final status.
+  const newly = (status: ScoreRecord["comboStatus"]) => updates.filter((update) => update.comboImproved && update.score.comboStatus === status).length;
   const ratingGain = previousAccount?.rating === null || previousAccount?.rating === undefined ? undefined : rating - previousAccount.rating;
   return {
     initial, playerName, previousRating: previousAccount?.rating ?? undefined, rating, ratingGain, scores, updates,
@@ -127,7 +129,7 @@ export function createSyncSummary(previousAccount: LinkedAccount | undefined, pr
     dxScoreRecordCount: updates.filter((update) => update.dxScoreGain !== undefined).length,
     rankUpdateCount: allRankUpdates.length, starUpdateCount: allStarUpdates.length,
     newApPlusCount: newly("AP+"), newApCount: newly("AP"), newFcPlusCount: newly("FC+"), newFcCount: newly("FC"),
-    newFdxCount: updates.filter((update) => update.score.syncStatus === "FDX" && update.previous?.syncStatus !== "FDX").length,
+    newFdxCount: updates.filter((update) => update.syncImproved && update.score.syncStatus === "FDX").length,
     rankUpdates, starUpdates, lampUpdates
   };
 }

@@ -95,6 +95,72 @@ test("browser sync sends a persisted notification after a restart and only on su
   }
 });
 
+test("failed sync notifications remain queued and are delivered after restart", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "maibot-sync-outbox-"));
+  const databasePath = join(directory, "test.sqlite");
+  const db = new BotDatabase(databasePath);
+  const port = await unusedPort();
+  const origin = `http://127.0.0.1:${port}`;
+  const payload = { playerName: "Player", rating: 1000, scores: [{ title: "Song", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "unknown", chartType: "dx" }] };
+  const catalog = { enrich: async (scores: unknown[]) => scores } as unknown as MaimaiCatalog;
+  const stopFailing = startBrowserSyncServer(origin, "127.0.0.1", port, db, catalog, async () => { throw new Error("temporary Discord failure"); });
+  try {
+    const synced = await postWithRetry(`${origin}/v1/browser-sync`, db.createImportToken("discord-user", { channelId: "channel-id", wantsImage: false }), payload);
+    assert.equal(synced.status, 200);
+    assert.equal(db.getPendingSyncNotifications().length, 1);
+  } finally {
+    stopFailing();
+  }
+
+  const delivered: string[] = [];
+  const recoveredPort = await unusedPort();
+  const recoveredOrigin = `http://127.0.0.1:${recoveredPort}`;
+  const stopRecovered = startBrowserSyncServer(recoveredOrigin, "127.0.0.1", recoveredPort, db, catalog, async (_recipient, summary) => { delivered.push(summary.playerName); });
+  try {
+    for (let attempt = 0; attempt < 10 && (!delivered.length || db.getPendingSyncNotifications().length); attempt += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual(delivered, ["Player"]);
+    assert.equal(db.getPendingSyncNotifications().length, 0);
+  } finally {
+    stopRecovered();
+    db.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("sync notifications for one user are delivered in import order", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "maibot-sync-notification-order-"));
+  const db = new BotDatabase(join(directory, "test.sqlite"));
+  const port = await unusedPort();
+  const origin = `http://127.0.0.1:${port}`;
+  const catalog = { enrich: async (scores: unknown[]) => scores } as unknown as MaimaiCatalog;
+  const delivered: string[] = [];
+  let releaseFirst: (() => void) | undefined;
+  const firstMayFinish = new Promise<void>((resolve) => { releaseFirst = resolve; });
+  let firstStarted: (() => void) | undefined;
+  const firstSending = new Promise<void>((resolve) => { firstStarted = resolve; });
+  const stop = startBrowserSyncServer(origin, "127.0.0.1", port, db, catalog, async (_recipient, summary) => {
+    delivered.push(summary.playerName);
+    if (summary.playerName === "First") {
+      firstStarted?.();
+      await firstMayFinish;
+    }
+  });
+  try {
+    const payload = (playerName: string) => ({ playerName, rating: 1000, scores: [{ title: playerName, difficulty: "MASTER", level: "14", achievements: 100, chartKind: "unknown", chartType: "dx" }] });
+    const first = postWithRetry(`${origin}/v1/browser-sync`, db.createImportToken("discord-user", { channelId: "channel-id", wantsImage: false }), payload("First"));
+    await firstSending;
+    const second = postWithRetry(`${origin}/v1/browser-sync`, db.createImportToken("discord-user", { channelId: "channel-id", wantsImage: false }), payload("Second"));
+    releaseFirst?.();
+    assert.equal((await first).status, 200);
+    assert.equal((await second).status, 200);
+    assert.deepEqual(delivered, ["First", "Second"]);
+  } finally {
+    stop();
+    db.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("Standard bookmarklet assigns ranks within the page's new and old sections", async () => {
   const bookmarklet = makePremiumBookmarklet("http://127.0.0.1:31337", "test-token");
   const browser = globalThis as unknown as Record<string, unknown>;

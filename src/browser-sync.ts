@@ -11,6 +11,18 @@ interface BrowserPayload { playerName: string; rating: number; scores: BrowserSc
 const importQueues = new Map<string, Promise<void>>();
 export type SyncResultNotifier = (recipient: ImportTokenRecipient, summary: ReturnType<typeof createSyncSummary>) => Promise<void>;
 
+async function deliverPendingSyncNotifications(db: BotDatabase, notify: SyncResultNotifier, discordUserId?: string): Promise<void> {
+  for (const pending of db.getPendingSyncNotifications(discordUserId)) {
+    await notify(pending.recipient, pending.summary);
+    db.deletePendingSyncNotification(pending.id);
+  }
+}
+
+async function retryPendingSyncNotifications(db: BotDatabase, notify: SyncResultNotifier): Promise<void> {
+  const userIds = new Set(db.getPendingSyncNotifications().map((pending) => pending.recipient.discordUserId));
+  await Promise.all([...userIds].map((discordUserId) => serializeImport(discordUserId, () => deliverPendingSyncNotifications(db, notify, discordUserId))));
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://maimaidx.jp",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -186,17 +198,26 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
       const scores = isFreeSync ? enrichedScores : mergeStandardScores(existingScores, enrichedScores);
       const summary = createSyncSummary(account, existingScores, profile.playerName, profile.rating, scores);
       db.importProfile(discordUserId, { ...profile, scores });
+      if (recipient.notificationChannelId) {
+        db.queueSyncNotification(recipient, summary);
+        if (notify) {
+          try {
+            await deliverPendingSyncNotifications(db, notify, discordUserId);
+          } catch (error) {
+            // Keep the outbox row so a future sync or bot restart can retry it.
+            console.warn(`Sync notification failed for ${discordUserId}`, error);
+          }
+        }
+      }
       return { count: parsedProfile.scores.length, summary };
       });
-      try {
-        if (recipient.notificationChannelId) await notify?.(recipient, result.summary);
-      } catch (error) {
-        console.warn(`Sync notification failed for ${discordUserId}`, error);
-      }
       return respond(response, 200, { ok: true, count: result.count });
     } catch (error) { return respond(response, 400, { error: error instanceof Error ? error.message : "invalid request" }); }
   });
   server.listen(listenPort, listenHost); server.on("error", (error) => console.error("Browser sync server failed", error));
+  if (notify) {
+    void retryPendingSyncNotifications(db, notify).catch((error) => console.warn("Pending sync notification delivery failed", error));
+  }
   console.log(`Browser sync endpoint: ${url.origin}/v1/browser-sync (listening on ${listenHost}:${listenPort})`); return () => server.close();
 }
 export function makeFreeBookmarklet(baseUrl: string, token: string): string {

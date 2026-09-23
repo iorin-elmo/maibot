@@ -13,6 +13,9 @@ const catalog = new MaimaiCatalog(config.dxdataUrl);
 function startSyncServer(): void {
   startBrowserSyncServer(config.importBaseUrl, config.syncListenHost, config.syncListenPort, db, catalog, async (recipient, summary) => {
   if (!recipient.notificationChannelId) return;
+  if (!client.isReady()) {
+    await new Promise<void>((resolve) => client.once(Events.ClientReady, () => resolve()));
+  }
   const channel = await client.channels.fetch(recipient.notificationChannelId);
   if (!channel?.isSendable()) throw new Error("Sync notification channel is not sendable");
   const files = recipient.wantsImage
@@ -48,7 +51,6 @@ async function registerCommands(): Promise<void> {
 
 client.once(Events.ClientReady, async (readyClient) => {
   try {
-    startSyncServer();
     await registerCommands();
     console.log(`Ready: ${readyClient.user.tag} (global commands registered)`);
   } catch (error) {
@@ -76,4 +78,5 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
+startSyncServer();
 client.login(config.discordToken);

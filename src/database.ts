@@ -3,11 +3,18 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ImportedProfile, LinkedAccount, ScoreRecord } from "./types.js";
+import type { SyncSummary } from "./sync-summary.js";
 
 export interface ImportTokenRecipient {
   discordUserId: string;
   notificationChannelId?: string;
   wantsImage: boolean;
+}
+
+export interface PendingSyncNotification {
+  id: number;
+  recipient: ImportTokenRecipient;
+  summary: SyncSummary;
 }
 
 export class BotDatabase {
@@ -48,6 +55,13 @@ export class BotDatabase {
         expires_at INTEGER NOT NULL,
         notification_channel_id TEXT,
         notification_image INTEGER NOT NULL DEFAULT 0
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS sync_notifications (
+        id INTEGER PRIMARY KEY,
+        discord_user_id TEXT NOT NULL REFERENCES accounts(discord_user_id) ON DELETE CASCADE,
+        channel_id TEXT NOT NULL,
+        wants_image INTEGER NOT NULL DEFAULT 0,
+        summary_json TEXT NOT NULL
       ) STRICT;
       CREATE INDEX IF NOT EXISTS scores_by_rating ON scores(discord_user_id, chart_kind, rating DESC);
     `);
@@ -111,6 +125,34 @@ export class BotDatabase {
 
   consumeImportToken(token: string): string | undefined {
     return this.consumeImportTokenWithRecipient(token)?.discordUserId;
+  }
+
+  queueSyncNotification(recipient: ImportTokenRecipient, summary: SyncSummary): void {
+    if (!recipient.notificationChannelId) return;
+    this.db.prepare(`INSERT INTO sync_notifications
+      (discord_user_id, channel_id, wants_image, summary_json) VALUES (?, ?, ?, ?)`)
+      .run(recipient.discordUserId, recipient.notificationChannelId, recipient.wantsImage ? 1 : 0, JSON.stringify(summary));
+  }
+
+  getPendingSyncNotifications(discordUserId?: string): PendingSyncNotification[] {
+    const statement = discordUserId
+      ? this.db.prepare(`SELECT id, discord_user_id AS discordUserId, channel_id AS channelId,
+          wants_image AS wantsImage, summary_json AS summaryJson FROM sync_notifications
+          WHERE discord_user_id = ? ORDER BY id`)
+      : this.db.prepare(`SELECT id, discord_user_id AS discordUserId, channel_id AS channelId,
+          wants_image AS wantsImage, summary_json AS summaryJson FROM sync_notifications ORDER BY id`);
+    const rows = (discordUserId ? statement.all(discordUserId) : statement.all()) as Array<{
+      id: number; discordUserId: string; channelId: string; wantsImage: number; summaryJson: string;
+    }>;
+    return rows.map((row) => ({
+      id: row.id,
+      recipient: { discordUserId: row.discordUserId, notificationChannelId: row.channelId, wantsImage: row.wantsImage === 1 },
+      summary: JSON.parse(row.summaryJson) as SyncSummary
+    }));
+  }
+
+  deletePendingSyncNotification(id: number): void {
+    this.db.prepare("DELETE FROM sync_notifications WHERE id = ?").run(id);
   }
 
   importProfile(discordUserId: string, profile: ImportedProfile): void {

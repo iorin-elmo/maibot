@@ -112,3 +112,11 @@ test("a combined combo and sync improvement retains both lamp transitions", () =
   assert.match(lampUpdate, /FC → AP/);
   assert.match(lampUpdate, /FS → FDX/);
 });
+
+test("a lower lamp in an otherwise improved score is not counted as a new lamp", () => {
+  const previous = [{ title: "Lower Lamp", difficulty: "MASTER", level: "14", achievements: 100, comboStatus: "AP" as const, syncStatus: "FDX" as const, rating: 300, chartKind: "new" as const, chartType: "dx" as const }];
+  const current = [{ ...previous[0], achievements: 100.1, comboStatus: "FC" as const, syncStatus: "FS" as const }];
+  const summary = createSyncSummary(account, previous, "Player", 1000, current);
+  assert.equal(summary.newFcCount, 0);
+  assert.equal(summary.newFdxCount, 0);
+});
