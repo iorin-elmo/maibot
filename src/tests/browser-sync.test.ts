@@ -7,7 +7,6 @@ import test from "node:test";
 import { makeFreeBookmarklet, makePremiumBookmarklet, startBrowserSyncServer } from "../browser-sync.js";
 import type { MaimaiCatalog } from "../catalog.js";
 import { BotDatabase } from "../database.js";
-import { registerSyncNotification } from "../sync-notification.js";
 
 async function unusedPort(): Promise<number> {
   const server = createServer();
@@ -67,31 +66,28 @@ test("Standardコース同期用ブックマークレットもDiscord本文に�
   assert.ok(bookmarklet.length < 4_000);
 });
 
-test("browser sync notifies only after a successful import", async () => {
+test("browser sync sends a persisted notification after a restart and only on success", async () => {
   const directory = mkdtempSync(join(tmpdir(), "maibot-sync-notification-"));
-  const db = new BotDatabase(join(directory, "test.sqlite"));
+  const databasePath = join(directory, "test.sqlite");
+  let db = new BotDatabase(databasePath);
   const port = await unusedPort();
   const origin = `http://127.0.0.1:${port}`;
-  const stop = startBrowserSyncServer(origin, "127.0.0.1", port, db, { enrich: async (scores: unknown[]) => scores } as unknown as MaimaiCatalog);
   const payload = { playerName: "Player", rating: 1000, scores: [{ title: "Song", difficulty: "MASTER", level: "14", achievements: 100, chartKind: "unknown", chartType: "dx" }] };
+  const successfulToken = db.createImportToken("discord-user", { channelId: "channel-id", wantsImage: true });
+  db.close();
+  db = new BotDatabase(databasePath);
+  const delivered: Array<{ channelId?: string; wantsImage: boolean; playerName: string }> = [];
+  const stop = startBrowserSyncServer(origin, "127.0.0.1", port, db, { enrich: async (scores: unknown[]) => scores } as unknown as MaimaiCatalog,
+    async (recipient, summary) => { delivered.push({ channelId: recipient.notificationChannelId, wantsImage: recipient.wantsImage, playerName: summary.playerName }); });
   try {
-    const successfulToken = db.createImportToken("discord-user");
-    let delivered = false;
-    registerSyncNotification(successfulToken, (summary) => {
-      delivered = true;
-      assert.equal(summary.initial, true);
-      assert.equal(summary.playerName, "Player");
-    });
     const successful = await postWithRetry(`${origin}/v1/browser-sync`, successfulToken, payload);
     assert.equal(successful.status, 200);
-    assert.equal(delivered, true);
+    assert.deepEqual(delivered, [{ channelId: "channel-id", wantsImage: true, playerName: "Player" }]);
 
-    const failedToken = db.createImportToken("discord-user");
-    let failedNotificationDelivered = false;
-    registerSyncNotification(failedToken, () => { failedNotificationDelivered = true; });
+    const failedToken = db.createImportToken("discord-user", { channelId: "channel-id", wantsImage: false });
     const failed = await postWithRetry(`${origin}/v1/browser-sync`, failedToken, { ...payload, scores: [] });
     assert.equal(failed.status, 400);
-    assert.equal(failedNotificationDelivered, false);
+    assert.equal(delivered.length, 1);
   } finally {
     stop();
     db.close();

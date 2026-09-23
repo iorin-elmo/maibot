@@ -4,6 +4,12 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ImportedProfile, LinkedAccount, ScoreRecord } from "./types.js";
 
+export interface ImportTokenRecipient {
+  discordUserId: string;
+  notificationChannelId?: string;
+  wantsImage: boolean;
+}
+
 export class BotDatabase {
   private readonly db: DatabaseSync;
 
@@ -39,7 +45,9 @@ export class BotDatabase {
       CREATE TABLE IF NOT EXISTS import_tokens (
         token_hash TEXT PRIMARY KEY,
         discord_user_id TEXT NOT NULL REFERENCES accounts(discord_user_id) ON DELETE CASCADE,
-        expires_at INTEGER NOT NULL
+        expires_at INTEGER NOT NULL,
+        notification_channel_id TEXT,
+        notification_image INTEGER NOT NULL DEFAULT 0
       ) STRICT;
       CREATE INDEX IF NOT EXISTS scores_by_rating ON scores(discord_user_id, chart_kind, rating DESC);
     `);
@@ -49,6 +57,8 @@ export class BotDatabase {
     try { this.db.exec("ALTER TABLE scores ADD COLUMN dx_score_max INTEGER"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE scores ADD COLUMN combo_status TEXT CHECK(combo_status IN ('AP+', 'AP', 'FC+', 'FC'))"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE scores ADD COLUMN sync_status TEXT CHECK(sync_status IN ('FDX', 'FS'))"); } catch { /* existing database */ }
+    try { this.db.exec("ALTER TABLE import_tokens ADD COLUMN notification_channel_id TEXT"); } catch { /* existing database */ }
+    try { this.db.exec("ALTER TABLE import_tokens ADD COLUMN notification_image INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
   }
 
   link(discordUserId: string, segaId: string): void {
@@ -71,24 +81,36 @@ export class BotDatabase {
     return this.db.prepare("SELECT discord_user_id AS discordUserId, sega_id AS segaId, player_name AS playerName, rating, updated_at AS updatedAt FROM accounts WHERE discord_user_id = ?").get(discordUserId) as LinkedAccount | undefined;
   }
 
-  createImportToken(discordUserId: string): string {
+  createImportToken(discordUserId: string, notification?: { channelId: string; wantsImage: boolean }): string {
     this.ensureAccount(discordUserId);
     if (!this.getAccount(discordUserId)) throw new Error("先に /maimai link を実行してください。");
     const token = randomBytes(24).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest("hex");
     this.db.prepare("DELETE FROM import_tokens WHERE discord_user_id = ? OR expires_at < ?").run(discordUserId, Date.now());
-    this.db.prepare("INSERT INTO import_tokens (token_hash, discord_user_id, expires_at) VALUES (?, ?, ?)")
-      .run(tokenHash, discordUserId, Date.now() + 10 * 60_000);
+    this.db.prepare(`INSERT INTO import_tokens (token_hash, discord_user_id, expires_at, notification_channel_id, notification_image)
+      VALUES (?, ?, ?, ?, ?)`)
+      .run(tokenHash, discordUserId, Date.now() + 10 * 60_000, notification?.channelId ?? null, notification?.wantsImage ? 1 : 0);
     return token;
   }
 
-  consumeImportToken(token: string): string | undefined {
+  consumeImportTokenWithRecipient(token: string): ImportTokenRecipient | undefined {
     const tokenHash = createHash("sha256").update(token).digest("hex");
-    const record = this.db.prepare("SELECT discord_user_id AS discordUserId, expires_at AS expiresAt FROM import_tokens WHERE token_hash = ?")
-      .get(tokenHash) as { discordUserId: string; expiresAt: number } | undefined;
+    const record = this.db.prepare(`SELECT discord_user_id AS discordUserId, expires_at AS expiresAt,
+      notification_channel_id AS notificationChannelId, notification_image AS notificationImage
+      FROM import_tokens WHERE token_hash = ?`).get(tokenHash) as {
+        discordUserId: string; expiresAt: number; notificationChannelId: string | null; notificationImage: number;
+      } | undefined;
     if (!record || record.expiresAt < Date.now()) return undefined;
     this.db.prepare("DELETE FROM import_tokens WHERE token_hash = ?").run(tokenHash);
-    return record.discordUserId;
+    return {
+      discordUserId: record.discordUserId,
+      notificationChannelId: record.notificationChannelId ?? undefined,
+      wantsImage: record.notificationImage === 1
+    };
+  }
+
+  consumeImportToken(token: string): string | undefined {
+    return this.consumeImportTokenWithRecipient(token)?.discordUserId;
   }
 
   importProfile(discordUserId: string, profile: ImportedProfile): void {

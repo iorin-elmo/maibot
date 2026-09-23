@@ -3,12 +3,10 @@ import {
 } from "discord.js";
 import { achievementRank, bestCandidates, bestScores, dxScorePercent, dxStar, dxStarCandidates, type BestCandidate, type DxStarCandidate } from "./analysis.js";
 import { makeFreeBookmarklet } from "./browser-sync.js";
-import { bestCards, candidateCards, dxScoreCards, dxStarCandidateCards, newConstantCards, progressCards, renderScoreCardImages, renderSyncSummaryImage } from "./best-image.js";
+import { bestCards, candidateCards, dxScoreCards, dxStarCandidateCards, newConstantCards, progressCards, renderScoreCardImages } from "./best-image.js";
 import type { MaimaiCatalog } from "./catalog.js";
 import type { BotDatabase } from "./database.js";
 import { isComboOrSyncKind, levelProgressKinds, plateByVersionAndKind, plateGoalDescription, plateVersions, progressKindSatisfied, type LevelProgressKind, type PlateKind } from "./progress.js";
-import { registerSyncNotification } from "./sync-notification.js";
-import { syncSummaryEmbed } from "./sync-summary.js";
 import { padDisplayEnd, truncateSongTitle } from "./text.js";
 import type { ScoreRecord } from "./types.js";
 
@@ -255,14 +253,8 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     return;
   }
   if (subcommand === "sync") {
-    const token = db.createImportToken(interaction.user.id);
     const wantsImage = interaction.options.getBoolean("image") === true;
-    registerSyncNotification(token, async (summary) => {
-      const files = wantsImage
-        ? [new AttachmentBuilder(await renderSyncSummaryImage(summary), { name: "maimai-sync-summary.jpg" })]
-        : [];
-      await interaction.followUp({ embeds: [syncSummaryEmbed(summary)], files });
-    });
+    const token = db.createImportToken(interaction.user.id, { channelId: interaction.channelId, wantsImage });
     const bookmarklet = makeFreeBookmarklet(importBaseUrl, token);
     const instructions = "maimai DX NETへログイン済みのブラウザで、任意のページから実行してください。全難易度の楽曲スコアを取得してBest 50を計算します。";
     await interaction.reply({

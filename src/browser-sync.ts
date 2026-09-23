@@ -1,15 +1,15 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { validateProfile } from "./analysis.js";
 import type { MaimaiCatalog } from "./catalog.js";
-import type { BotDatabase } from "./database.js";
+import type { BotDatabase, ImportTokenRecipient } from "./database.js";
 import type { ChartKind, ComboStatus, ImportedProfile, SyncStatus } from "./types.js";
 import { createSyncSummary } from "./sync-summary.js";
-import { takeSyncNotification } from "./sync-notification.js";
 
 interface BrowserScore { title: string; difficulty: string; level?: string; achievements?: number; dxScore?: number; comboStatus?: ComboStatus; syncStatus?: SyncStatus; chartKind: ChartKind; chartType: "dx" | "standard"; officialRank?: number; }
 interface BrowserPayload { playerName: string; rating: number; scores: BrowserScore[]; }
 
 const importQueues = new Map<string, Promise<void>>();
+export type SyncResultNotifier = (recipient: ImportTokenRecipient, summary: ReturnType<typeof createSyncSummary>) => Promise<void>;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://maimaidx.jp",
@@ -142,7 +142,7 @@ function validateImportBaseUrl(url: URL): void {
   if (url.protocol === "https:" || (url.protocol === "http:" && loopbackHosts.has(url.hostname))) return;
   throw new Error("IMPORT_BASE_URL はローカルHTTPまたは公開HTTPS URLを指定してください。");
 }
-export function startBrowserSyncServer(baseUrl: string, listenHost: string, listenPort: number, db: BotDatabase, catalog: MaimaiCatalog): () => void {
+export function startBrowserSyncServer(baseUrl: string, listenHost: string, listenPort: number, db: BotDatabase, catalog: MaimaiCatalog, notify?: SyncResultNotifier): () => void {
   const url = new URL(baseUrl); validateImportBaseUrl(url);
   const server = createServer(async (request, response) => {
     let requestUrl: URL;
@@ -157,9 +157,9 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
     if (request.method !== "POST" || requestUrl.pathname !== "/v1/browser-sync") return respond(response, 404, { error: "not found" });
     const token = request.headers["x-import-token"];
     if (typeof token !== "string" || !token) return respond(response, 401, { error: "token required" });
-    const notify = takeSyncNotification(token);
-    const discordUserId = db.consumeImportToken(token);
-    if (!discordUserId) return respond(response, 401, { error: "token expired" });
+    const recipient = db.consumeImportTokenWithRecipient(token);
+    if (!recipient) return respond(response, 401, { error: "token expired" });
+    const { discordUserId } = recipient;
     try {
       const result = await serializeImport(discordUserId, async () => {
       const payload = await requestJson(request) as BrowserPayload;
@@ -189,7 +189,7 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
       return { count: parsedProfile.scores.length, summary };
       });
       try {
-        await notify?.(result.summary);
+        if (recipient.notificationChannelId) await notify?.(recipient, result.summary);
       } catch (error) {
         console.warn(`Sync notification failed for ${discordUserId}`, error);
       }
