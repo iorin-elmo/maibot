@@ -112,6 +112,7 @@ export class MaimaiCatalog {
           lockedTitles.add(normalize(song.title));
           continue;
         }
+        const displayTitle = song.title.trim() || "/ / // / /";
         for (const sheet of song.sheets ?? []) {
         if (Array.isArray(sheet.serverIds) && !sheet.serverIds.includes("jp")) continue;
         // UTAGE charts (including two-player variants) are not part of the
@@ -129,7 +130,7 @@ export class MaimaiCatalog {
           jacketImageName,
           version
         });
-        charts.push({ key, title: song.title, difficulty: sheet.difficulty, level: sheet.level, chartType: type,
+        charts.push({ key, title: displayTitle, difficulty: sheet.difficulty, level: sheet.level, chartType: type,
           internalLevel: sheet.internalLevelValue, dxScoreMax, jacketImageName, version });
         }
       }
