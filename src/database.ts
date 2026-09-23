@@ -3,6 +3,23 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ImportedProfile, LinkedAccount, ScoreRecord } from "./types.js";
+import type { SyncSummary } from "./sync-summary.js";
+
+export interface ImportTokenRecipient {
+  discordUserId: string;
+  notificationChannelId?: string;
+  wantsImage: boolean;
+}
+
+export interface PendingSyncNotification {
+  id: number;
+  recipient: ImportTokenRecipient;
+  summary: SyncSummary;
+  deliveryAttempts: number;
+}
+
+const MAX_SYNC_NOTIFICATION_DELIVERY_ATTEMPTS = 5;
+const DEAD_SYNC_NOTIFICATION_RETENTION_MS = 30 * 24 * 60 * 60_000;
 
 export class BotDatabase {
   private readonly db: DatabaseSync;
@@ -39,7 +56,26 @@ export class BotDatabase {
       CREATE TABLE IF NOT EXISTS import_tokens (
         token_hash TEXT PRIMARY KEY,
         discord_user_id TEXT NOT NULL REFERENCES accounts(discord_user_id) ON DELETE CASCADE,
-        expires_at INTEGER NOT NULL
+        expires_at INTEGER NOT NULL,
+        notification_channel_id TEXT,
+        notification_image INTEGER NOT NULL DEFAULT 0
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS sync_notifications (
+        id INTEGER PRIMARY KEY,
+        discord_user_id TEXT NOT NULL REFERENCES accounts(discord_user_id) ON DELETE CASCADE,
+        channel_id TEXT NOT NULL,
+        wants_image INTEGER NOT NULL DEFAULT 0,
+        summary_json TEXT NOT NULL,
+        delivery_attempts INTEGER NOT NULL DEFAULT 0
+      ) STRICT;
+      CREATE TABLE IF NOT EXISTS dead_sync_notifications (
+        id INTEGER PRIMARY KEY,
+        discord_user_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        wants_image INTEGER NOT NULL,
+        summary_json TEXT NOT NULL,
+        delivery_attempts INTEGER NOT NULL,
+        discarded_at INTEGER NOT NULL
       ) STRICT;
       CREATE INDEX IF NOT EXISTS scores_by_rating ON scores(discord_user_id, chart_kind, rating DESC);
     `);
@@ -49,6 +85,10 @@ export class BotDatabase {
     try { this.db.exec("ALTER TABLE scores ADD COLUMN dx_score_max INTEGER"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE scores ADD COLUMN combo_status TEXT CHECK(combo_status IN ('AP+', 'AP', 'FC+', 'FC'))"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE scores ADD COLUMN sync_status TEXT CHECK(sync_status IN ('FDX', 'FS'))"); } catch { /* existing database */ }
+    try { this.db.exec("ALTER TABLE import_tokens ADD COLUMN notification_channel_id TEXT"); } catch { /* existing database */ }
+    try { this.db.exec("ALTER TABLE import_tokens ADD COLUMN notification_image INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
+    try { this.db.exec("ALTER TABLE sync_notifications ADD COLUMN delivery_attempts INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
+    this.db.prepare("DELETE FROM dead_sync_notifications WHERE discarded_at < ?").run(Date.now() - DEAD_SYNC_NOTIFICATION_RETENTION_MS);
   }
 
   link(discordUserId: string, segaId: string): void {
@@ -71,27 +111,104 @@ export class BotDatabase {
     return this.db.prepare("SELECT discord_user_id AS discordUserId, sega_id AS segaId, player_name AS playerName, rating, updated_at AS updatedAt FROM accounts WHERE discord_user_id = ?").get(discordUserId) as LinkedAccount | undefined;
   }
 
-  createImportToken(discordUserId: string): string {
+  createImportToken(discordUserId: string, notification?: { channelId: string; wantsImage: boolean }): string {
     this.ensureAccount(discordUserId);
     if (!this.getAccount(discordUserId)) throw new Error("先に /maimai link を実行してください。");
     const token = randomBytes(24).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest("hex");
     this.db.prepare("DELETE FROM import_tokens WHERE discord_user_id = ? OR expires_at < ?").run(discordUserId, Date.now());
-    this.db.prepare("INSERT INTO import_tokens (token_hash, discord_user_id, expires_at) VALUES (?, ?, ?)")
-      .run(tokenHash, discordUserId, Date.now() + 10 * 60_000);
+    this.db.prepare(`INSERT INTO import_tokens (token_hash, discord_user_id, expires_at, notification_channel_id, notification_image)
+      VALUES (?, ?, ?, ?, ?)`)
+      .run(tokenHash, discordUserId, Date.now() + 10 * 60_000, notification?.channelId ?? null, notification?.wantsImage ? 1 : 0);
     return token;
   }
 
-  consumeImportToken(token: string): string | undefined {
+  consumeImportTokenWithRecipient(token: string): ImportTokenRecipient | undefined {
     const tokenHash = createHash("sha256").update(token).digest("hex");
-    const record = this.db.prepare("SELECT discord_user_id AS discordUserId, expires_at AS expiresAt FROM import_tokens WHERE token_hash = ?")
-      .get(tokenHash) as { discordUserId: string; expiresAt: number } | undefined;
+    const record = this.db.prepare(`SELECT discord_user_id AS discordUserId, expires_at AS expiresAt,
+      notification_channel_id AS notificationChannelId, notification_image AS notificationImage
+      FROM import_tokens WHERE token_hash = ?`).get(tokenHash) as {
+        discordUserId: string; expiresAt: number; notificationChannelId: string | null; notificationImage: number;
+      } | undefined;
     if (!record || record.expiresAt < Date.now()) return undefined;
     this.db.prepare("DELETE FROM import_tokens WHERE token_hash = ?").run(tokenHash);
-    return record.discordUserId;
+    return {
+      discordUserId: record.discordUserId,
+      notificationChannelId: record.notificationChannelId ?? undefined,
+      wantsImage: record.notificationImage === 1
+    };
+  }
+
+  consumeImportToken(token: string): string | undefined {
+    return this.consumeImportTokenWithRecipient(token)?.discordUserId;
+  }
+
+  queueSyncNotification(recipient: ImportTokenRecipient, summary: SyncSummary): void {
+    if (!recipient.notificationChannelId) return;
+    this.insertSyncNotification(recipient, summary);
+  }
+
+  private insertSyncNotification(recipient: ImportTokenRecipient, summary: SyncSummary): void {
+    if (!recipient.notificationChannelId) return;
+    this.db.prepare(`INSERT INTO sync_notifications
+      (discord_user_id, channel_id, wants_image, summary_json) VALUES (?, ?, ?, ?)`)
+      .run(recipient.discordUserId, recipient.notificationChannelId, recipient.wantsImage ? 1 : 0, JSON.stringify(summary));
+  }
+
+  getPendingSyncNotifications(discordUserId?: string): PendingSyncNotification[] {
+    const statement = discordUserId
+      ? this.db.prepare(`SELECT id, discord_user_id AS discordUserId, channel_id AS channelId,
+          wants_image AS wantsImage, summary_json AS summaryJson, delivery_attempts AS deliveryAttempts FROM sync_notifications
+          WHERE discord_user_id = ? ORDER BY id`)
+      : this.db.prepare(`SELECT id, discord_user_id AS discordUserId, channel_id AS channelId,
+          wants_image AS wantsImage, summary_json AS summaryJson, delivery_attempts AS deliveryAttempts FROM sync_notifications ORDER BY id`);
+    const rows = (discordUserId ? statement.all(discordUserId) : statement.all()) as Array<{
+      id: number; discordUserId: string; channelId: string; wantsImage: number; summaryJson: string; deliveryAttempts: number;
+    }>;
+    return rows.map((row) => ({
+      id: row.id,
+      recipient: { discordUserId: row.discordUserId, notificationChannelId: row.channelId, wantsImage: row.wantsImage === 1 },
+      summary: JSON.parse(row.summaryJson) as SyncSummary,
+      deliveryAttempts: row.deliveryAttempts
+    }));
+  }
+
+  deletePendingSyncNotification(id: number): void {
+    this.db.prepare("DELETE FROM sync_notifications WHERE id = ?").run(id);
+  }
+
+  recordSyncNotificationFailure(id: number): boolean {
+    const notification = this.db.prepare(`SELECT discord_user_id AS discordUserId, channel_id AS channelId,
+      wants_image AS wantsImage, summary_json AS summaryJson, delivery_attempts AS deliveryAttempts
+      FROM sync_notifications WHERE id = ?`).get(id) as {
+        discordUserId: string; channelId: string; wantsImage: number; summaryJson: string; deliveryAttempts: number;
+      } | undefined;
+    if (!notification) return false;
+    const deliveryAttempts = notification.deliveryAttempts + 1;
+    if (deliveryAttempts < MAX_SYNC_NOTIFICATION_DELIVERY_ATTEMPTS) {
+      this.db.prepare("UPDATE sync_notifications SET delivery_attempts = ? WHERE id = ?").run(deliveryAttempts, id);
+      return true;
+    }
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.prepare(`INSERT INTO dead_sync_notifications
+        (discord_user_id, channel_id, wants_image, summary_json, delivery_attempts, discarded_at)
+        VALUES (?, ?, ?, ?, ?, ?)`)
+        .run(notification.discordUserId, notification.channelId, notification.wantsImage, notification.summaryJson, deliveryAttempts, Date.now());
+      this.db.prepare("DELETE FROM sync_notifications WHERE id = ?").run(id);
+      this.db.exec("COMMIT");
+      return false;
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   importProfile(discordUserId: string, profile: ImportedProfile): void {
+    this.importProfileWithSyncNotification(discordUserId, profile);
+  }
+
+  importProfileWithSyncNotification(discordUserId: string, profile: ImportedProfile, notification?: { recipient: ImportTokenRecipient; summary: SyncSummary }): void {
     this.ensureAccount(discordUserId);
     if (!this.getAccount(discordUserId)) throw new Error("先に /maimai link を実行してください。");
     this.db.exec("BEGIN IMMEDIATE");
@@ -105,6 +222,7 @@ export class BotDatabase {
       for (const score of profile.scores) insert.run(discordUserId, score.title, score.difficulty, score.level ?? null,
         score.achievements ?? null, score.dxScore ?? null, score.dxScoreMax ?? null, score.comboStatus ?? null, score.syncStatus ?? null, score.rating, score.chartKind ?? "unknown", score.chartType ?? null,
         score.internalLevel ?? null, score.officialRank ?? null, score.playedAt ?? null);
+      if (notification) this.insertSyncNotification(notification.recipient, notification.summary);
       this.db.exec("COMMIT");
     } catch (error) {
       this.db.exec("ROLLBACK");

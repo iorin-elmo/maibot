@@ -14,6 +14,7 @@ test("new/old ごとにレート順でベストを切り出す", () => {
 
 test("不正なプロフィールJSONを拒否する", () => {
   assert.throws(() => validateProfile({ playerName: "x", rating: 1, scores: [{ title: "x", difficulty: "M" }] }));
+  assert.throws(() => validateProfile({ playerName: "x".repeat(101), rating: 1, scores: [] }), /100文字以内/);
 });
 
 test("候補は枠入り時に押し出される最低レートを基準にする", () => {

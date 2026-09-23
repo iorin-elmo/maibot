@@ -1,13 +1,43 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { validateProfile } from "./analysis.js";
 import type { MaimaiCatalog } from "./catalog.js";
-import type { BotDatabase } from "./database.js";
+import type { BotDatabase, ImportTokenRecipient } from "./database.js";
 import type { ChartKind, ComboStatus, ImportedProfile, SyncStatus } from "./types.js";
+import { createSyncSummary } from "./sync-summary.js";
 
 interface BrowserScore { title: string; difficulty: string; level?: string; achievements?: number; dxScore?: number; comboStatus?: ComboStatus; syncStatus?: SyncStatus; chartKind: ChartKind; chartType: "dx" | "standard"; officialRank?: number; }
 interface BrowserPayload { playerName: string; rating: number; scores: BrowserScore[]; }
 
 const importQueues = new Map<string, Promise<void>>();
+const notificationQueues = new Map<string, Promise<void>>();
+export type SyncResultNotifier = (recipient: ImportTokenRecipient, summary: ReturnType<typeof createSyncSummary>) => Promise<void>;
+
+async function deliverPendingSyncNotifications(db: BotDatabase, notify: SyncResultNotifier, discordUserId?: string): Promise<void> {
+  for (const pending of db.getPendingSyncNotifications(discordUserId)) {
+    try {
+      await notify(pending.recipient, pending.summary);
+      db.deletePendingSyncNotification(pending.id);
+    } catch (error) {
+      if (db.recordSyncNotificationFailure(pending.id)) throw error;
+      console.warn(`Discarded sync notification ${pending.id} after repeated delivery failures`, error);
+    }
+  }
+}
+
+async function retryPendingSyncNotifications(db: BotDatabase, notify: SyncResultNotifier): Promise<void> {
+  const userIds = new Set(db.getPendingSyncNotifications().map((pending) => pending.recipient.discordUserId));
+  await Promise.all([...userIds].map((discordUserId) => queuePendingSyncNotificationDelivery(db, notify, discordUserId)));
+}
+
+function queuePendingSyncNotificationDelivery(db: BotDatabase, notify: SyncResultNotifier, discordUserId: string): Promise<void> {
+  const previous = notificationQueues.get(discordUserId) ?? Promise.resolve();
+  const result = previous.catch(() => undefined).then(() => deliverPendingSyncNotifications(db, notify, discordUserId));
+  const tail = result.then(() => undefined, () => undefined);
+  notificationQueues.set(discordUserId, tail);
+  return result.finally(() => {
+    if (notificationQueues.get(discordUserId) === tail) notificationQueues.delete(discordUserId);
+  });
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "https://maimaidx.jp",
@@ -140,7 +170,7 @@ function validateImportBaseUrl(url: URL): void {
   if (url.protocol === "https:" || (url.protocol === "http:" && loopbackHosts.has(url.hostname))) return;
   throw new Error("IMPORT_BASE_URL はローカルHTTPまたは公開HTTPS URLを指定してください。");
 }
-export function startBrowserSyncServer(baseUrl: string, listenHost: string, listenPort: number, db: BotDatabase, catalog: MaimaiCatalog): () => void {
+export function startBrowserSyncServer(baseUrl: string, listenHost: string, listenPort: number, db: BotDatabase, catalog: MaimaiCatalog, notify?: SyncResultNotifier): () => void {
   const url = new URL(baseUrl); validateImportBaseUrl(url);
   const server = createServer(async (request, response) => {
     let requestUrl: URL;
@@ -155,10 +185,11 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
     if (request.method !== "POST" || requestUrl.pathname !== "/v1/browser-sync") return respond(response, 404, { error: "not found" });
     const token = request.headers["x-import-token"];
     if (typeof token !== "string" || !token) return respond(response, 401, { error: "token required" });
-    const discordUserId = db.consumeImportToken(token);
-    if (!discordUserId) return respond(response, 401, { error: "token expired" });
+    const recipient = db.consumeImportTokenWithRecipient(token);
+    if (!recipient) return respond(response, 401, { error: "token expired" });
+    const { discordUserId } = recipient;
     try {
-      const count = await serializeImport(discordUserId, async () => {
+      const result = await serializeImport(discordUserId, async () => {
       const payload = await requestJson(request) as BrowserPayload;
       const parsedProfile = asProfile(payload);
       if (!parsedProfile.scores.length) throw new Error("スコアを読み取れなかったため、既存データは変更しませんでした。");
@@ -181,13 +212,25 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
         validateStandardSnapshot(existingScores, enrichedScores);
       }
       const scores = isFreeSync ? enrichedScores : mergeStandardScores(existingScores, enrichedScores);
-      db.importProfile(discordUserId, { ...profile, scores });
-      return parsedProfile.scores.length;
+      const summary = createSyncSummary(account, existingScores, profile.playerName, profile.rating, scores);
+      db.importProfileWithSyncNotification(discordUserId, { ...profile, scores }, recipient.notificationChannelId ? { recipient, summary } : undefined);
+      if (recipient.notificationChannelId) {
+        if (notify) {
+          void queuePendingSyncNotificationDelivery(db, notify, discordUserId).catch((error) => {
+            // Keep the outbox row so a future sync or bot restart can retry it.
+            console.warn(`Sync notification failed for ${discordUserId}`, error);
+          });
+        }
+      }
+      return { count: parsedProfile.scores.length, summary };
       });
-      return respond(response, 200, { ok: true, count });
+      return respond(response, 200, { ok: true, count: result.count });
     } catch (error) { return respond(response, 400, { error: error instanceof Error ? error.message : "invalid request" }); }
   });
   server.listen(listenPort, listenHost); server.on("error", (error) => console.error("Browser sync server failed", error));
+  if (notify) {
+    void retryPendingSyncNotifications(db, notify).catch((error) => console.warn("Pending sync notification delivery failed", error));
+  }
   console.log(`Browser sync endpoint: ${url.origin}/v1/browser-sync (listening on ${listenHost}:${listenPort})`); return () => server.close();
 }
 export function makeFreeBookmarklet(baseUrl: string, token: string): string {

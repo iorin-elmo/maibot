@@ -53,7 +53,8 @@ export const maimaiCommand = new SlashCommandBuilder()
   .setDescription("maimaiのベスト枠を表示します")
   .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM)
   .addSubcommand((command) => command.setName("help").setDescription("使い方を表示します"))
-  .addSubcommand((command) => command.setName("sync").setDescription("無料コースのversion別スコアから同期します"))
+  .addSubcommand((command) => command.setName("sync").setDescription("無料コースのversion別スコアから同期します")
+    .addBooleanOption(imageOption))
   .addSubcommand((command) => command.setName("newconstant").setDescription("新曲譜面を定数が高い順に表示します")
     .addIntegerOption(newConstantCountOption)
     .addBooleanOption(imageOption))
@@ -235,7 +236,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       .setTitle("maimai Bot の使い方")
       .setDescription("`/maimai sync` を実行し、返信のブックマークレットをログイン済みのmaimai DX NET上で実行してください。")
       .addFields(
-        { name: "/maimai sync", value: "無料コース向け。version別スコアからBest 50を計算して同期" },
+        { name: "/maimai sync [image]", value: "無料コース向け。version別スコアからBest 50を計算して同期。image で同期結果をジャケット付き画像でも出力" },
         { name: "/maimai newconstant [count] [image]", value: "新曲（最新2バージョン）のDX/STD譜面を定数が高い順に表示。image でジャケット画像、既定30件・最大50件" },
         { name: "/maimai plate <version> <kind> [count] [image]", value: "指定プレートに不足している譜面を定数が高い順に表示。version は 熊・彩など、kind は 神・極・将・舞舞。image でジャケット画像" },
         { name: "/maimai level <level> <kind> [count] [image]", value: "指定レベルの未AP+/AP/SSS+/SSS/SS+/SS/S+/S/FC+/FC/FDXを達成率順に表示。image でジャケット画像" },
@@ -246,17 +247,18 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         { name: "/maimai dxscore <level> [count] [image]", value: "指定レベルのDXスコア%順。現在DXスコア / 譜面ごとの最大DXスコアを表示（既定10件、最大50件）" },
         { name: "/maimai dxstar <level> <star> [count] [image]", value: "指定レベルで、次の指定星まであと何DXスコアかが少ない順。star は1〜6（既定10件、最大50件）" },
         { name: "kind", value: "新曲 / 旧曲 / 全曲。省略時は全曲。" },
-        { name: "詳細", value: "詳細は https://iorin-elmo.github.io/maibot をご覧ください。" }
+        { name: "詳細", value: "詳細は [https://iorin-elmo.github.io/maibot](https://iorin-elmo.github.io/maibot) をご覧ください。" }
       );
     await interaction.reply({ embeds: [embed], ephemeral: true });
     return;
   }
   if (subcommand === "sync") {
-    const token = db.createImportToken(interaction.user.id);
+    const wantsImage = interaction.options.getBoolean("image") === true;
+    const token = db.createImportToken(interaction.user.id, { channelId: interaction.channelId, wantsImage });
     const bookmarklet = makeFreeBookmarklet(importBaseUrl, token);
     const instructions = "maimai DX NETへログイン済みのブラウザで、任意のページから実行してください。全難易度の楽曲スコアを取得してBest 50を計算します。";
     await interaction.reply({
-      content: `下のコード全体をコピーして、ブラウザのブックマークURL欄に貼り付けてください。${instructions}\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのリンクは10分間・1回だけ有効です。SEGA ID・パスワードは送信されません。`,
+      content: `下のコード全体をコピーして、ブラウザのブックマークURL欄に貼り付けてください。${instructions}\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのリンクは10分間・1回だけ有効です。SEGA ID・パスワードは送信されません。同期が終わると、このチャンネルに結果を通知します。`,
       ephemeral: true
     });
     return;
