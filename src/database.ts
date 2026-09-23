@@ -129,6 +129,11 @@ export class BotDatabase {
 
   queueSyncNotification(recipient: ImportTokenRecipient, summary: SyncSummary): void {
     if (!recipient.notificationChannelId) return;
+    this.insertSyncNotification(recipient, summary);
+  }
+
+  private insertSyncNotification(recipient: ImportTokenRecipient, summary: SyncSummary): void {
+    if (!recipient.notificationChannelId) return;
     this.db.prepare(`INSERT INTO sync_notifications
       (discord_user_id, channel_id, wants_image, summary_json) VALUES (?, ?, ?, ?)`)
       .run(recipient.discordUserId, recipient.notificationChannelId, recipient.wantsImage ? 1 : 0, JSON.stringify(summary));
@@ -156,6 +161,10 @@ export class BotDatabase {
   }
 
   importProfile(discordUserId: string, profile: ImportedProfile): void {
+    this.importProfileWithSyncNotification(discordUserId, profile);
+  }
+
+  importProfileWithSyncNotification(discordUserId: string, profile: ImportedProfile, notification?: { recipient: ImportTokenRecipient; summary: SyncSummary }): void {
     this.ensureAccount(discordUserId);
     if (!this.getAccount(discordUserId)) throw new Error("先に /maimai link を実行してください。");
     this.db.exec("BEGIN IMMEDIATE");
@@ -169,6 +178,7 @@ export class BotDatabase {
       for (const score of profile.scores) insert.run(discordUserId, score.title, score.difficulty, score.level ?? null,
         score.achievements ?? null, score.dxScore ?? null, score.dxScoreMax ?? null, score.comboStatus ?? null, score.syncStatus ?? null, score.rating, score.chartKind ?? "unknown", score.chartType ?? null,
         score.internalLevel ?? null, score.officialRank ?? null, score.playedAt ?? null);
+      if (notification) this.insertSyncNotification(notification.recipient, notification.summary);
       this.db.exec("COMMIT");
     } catch (error) {
       this.db.exec("ROLLBACK");

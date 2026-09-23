@@ -197,9 +197,8 @@ export function startBrowserSyncServer(baseUrl: string, listenHost: string, list
       }
       const scores = isFreeSync ? enrichedScores : mergeStandardScores(existingScores, enrichedScores);
       const summary = createSyncSummary(account, existingScores, profile.playerName, profile.rating, scores);
-      db.importProfile(discordUserId, { ...profile, scores });
+      db.importProfileWithSyncNotification(discordUserId, { ...profile, scores }, recipient.notificationChannelId ? { recipient, summary } : undefined);
       if (recipient.notificationChannelId) {
-        db.queueSyncNotification(recipient, summary);
         if (notify) {
           try {
             await deliverPendingSyncNotifications(db, notify, discordUserId);
