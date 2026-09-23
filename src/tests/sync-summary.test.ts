@@ -103,6 +103,19 @@ test("an FDX-only improvement appears in the lamp updates", () => {
   assert.match(fields.find((field) => field.name === "ランプ更新")?.value ?? "", /FS → FDX/);
 });
 
+test("lamp updates prioritize FDX over FS before chart difficulty", () => {
+  const previous = [
+    { title: "FS", difficulty: "MASTER", level: "15", achievements: 100, rating: 300, chartKind: "new" as const, chartType: "dx" as const },
+    { title: "FDX", difficulty: "MASTER", level: "14", achievements: 100, rating: 300, chartKind: "new" as const, chartType: "dx" as const }
+  ];
+  const current = [
+    { ...previous[0], syncStatus: "FS" as const },
+    { ...previous[1], syncStatus: "FDX" as const }
+  ];
+  const summary = createSyncSummary(account, previous, "Player", 1000, current);
+  assert.deepEqual(summary.lampUpdates.map((update) => update.score.title), ["FDX", "FS"]);
+});
+
 test("a combined combo and sync improvement retains both lamp transitions", () => {
   const previous = [{ title: "Both", difficulty: "MASTER", level: "14", achievements: 100, comboStatus: "FC" as const, syncStatus: "FS" as const, rating: 300, chartKind: "new" as const, chartType: "dx" as const }];
   const current = [{ ...previous[0], comboStatus: "AP" as const, syncStatus: "FDX" as const }];

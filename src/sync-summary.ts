@@ -115,6 +115,7 @@ export function createSyncSummary(previousAccount: LinkedAccount | undefined, pr
       || compareDifficulty(left.score, right.score) || (right.dxScoreGain ?? 0) - (left.dxScoreGain ?? 0));
   const allLampUpdates = updates.filter((update) => update.comboImproved || update.syncImproved)
     .sort((left, right) => comboOrder[right.score.comboStatus ?? "undefined"] - comboOrder[left.score.comboStatus ?? "undefined"]
+      || syncOrder[right.score.syncStatus ?? "undefined"] - syncOrder[left.score.syncStatus ?? "undefined"]
       || compareDifficulty(left.score, right.score) || (right.score.achievements ?? 0) - (left.score.achievements ?? 0));
   const rankUpdates = limitForDisplay(allRankUpdates);
   const starUpdates = limitForDisplay(allStarUpdates);
