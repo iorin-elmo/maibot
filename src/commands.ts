@@ -272,7 +272,8 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
 
   const wantsImage = subcommand === "image" || interaction.options.getBoolean("image") === true;
   const kind = interaction.options.getString("kind") ?? "all";
-  const allScores = db.getScores(interaction.user.id);
+  const storedScores = db.getScores(interaction.user.id);
+  const allScores = catalog ? await catalog.excludeLocked(storedScores) : storedScores;
   const playerName = account.playerName ?? "maimai";
   if (subcommand === "newconstant") {
     if (!catalog) throw new Error("譜面定数データを利用できません。");

@@ -10,7 +10,7 @@ interface CatalogSheet {
   /** The version in which this particular chart was added. */
   version?: string;
 }
-interface CatalogSong { title: string; imageName?: string; version?: string; sheets: CatalogSheet[]; }
+interface CatalogSong { title: string; imageName?: string; version?: string; isLocked?: boolean; sheets: CatalogSheet[]; }
 interface CatalogDocument {
   versions?: Array<{ version: string }>;
   songs: CatalogSong[];
@@ -38,6 +38,7 @@ interface LoadedCatalog {
   charts: CatalogChart[];
   newestVersions: Set<string>;
   knownVersions: Set<string>;
+  lockedTitles: Set<string>;
 }
 
 function normalize(value: string): string {
@@ -66,6 +67,7 @@ export class MaimaiCatalog {
   private cachedCharts: CatalogChart[] | undefined;
   private cachedNewestVersions: Set<string> | undefined;
   private cachedKnownVersions: Set<string> | undefined;
+  private cachedLockedTitles: Set<string> | undefined;
   private loadedAt = 0;
   private readonly cacheDurationMs = 6 * 60 * 60 * 1_000;
 
@@ -93,6 +95,7 @@ export class MaimaiCatalog {
         charts: cachedCharts,
         newestVersions: this.cachedNewestVersions ?? new Set<string>(),
         knownVersions: this.cachedKnownVersions ?? new Set<string>()
+        , lockedTitles: this.cachedLockedTitles ?? new Set<string>()
       };
     }
     if (!this.loadPromise) this.loadPromise = (async () => {
@@ -102,7 +105,10 @@ export class MaimaiCatalog {
       if (!Array.isArray(document.songs)) throw new Error("譜面定数データの形式が不正です。");
       const index = new Map<string, CatalogEntry>();
       const charts: CatalogChart[] = [];
-      for (const song of document.songs) for (const sheet of song.sheets ?? []) {
+      const lockedTitles = new Set<string>();
+      for (const song of document.songs) {
+        if (song.isLocked) { lockedTitles.add(normalize(song.title)); continue; }
+        for (const sheet of song.sheets ?? []) {
         // UTAGE charts (including two-player variants) are not part of the
         // new-song rating frame and must not appear in its constant ranking.
         if (sheet.type !== "dx" && sheet.type !== "std") continue;
@@ -120,6 +126,7 @@ export class MaimaiCatalog {
         });
         charts.push({ key, title: song.title, difficulty: sheet.difficulty, level: sheet.level, chartType: type,
           internalLevel: sheet.internalLevelValue, dxScoreMax, jacketImageName, version });
+        }
       }
       const allVersionIds = Array.isArray(document.versions)
         ? document.versions.map((version) => versionId(version?.version))
@@ -130,7 +137,7 @@ export class MaimaiCatalog {
         && new Set(latestVersionIds).size === 2;
       const newestVersions = hasTwoDistinctVersions ? new Set(latestVersionIds) : new Set<string>();
       const knownVersions = new Set(allVersionIds.filter((version): version is string => version !== undefined));
-      const loaded = { index, charts, newestVersions, knownVersions };
+      const loaded = { index, charts, newestVersions, knownVersions, lockedTitles };
       // Standard sync only needs the song index, so cache it independently.
       // Free sync must retry malformed version metadata rather than treating
       // an invalid latest-two split as valid for the full TTL.
@@ -139,6 +146,7 @@ export class MaimaiCatalog {
       this.cachedCharts = charts;
       this.cachedNewestVersions = hasTwoDistinctVersions ? newestVersions : undefined;
       this.cachedKnownVersions = hasTwoDistinctVersions ? knownVersions : undefined;
+      this.cachedLockedTitles = lockedTitles;
       return loaded;
     })().finally(() => { this.loadPromise = undefined; });
     return this.loadPromise;
@@ -172,6 +180,11 @@ export class MaimaiCatalog {
         rating: singleChartRating(entry.internalLevel, score.achievements)
       };
     });
+  }
+
+  async excludeLocked(scores: ScoreRecord[]): Promise<ScoreRecord[]> {
+    const { lockedTitles } = await this.load(false);
+    return scores.filter((score) => !lockedTitles.has(normalize(score.title)));
   }
 
   private scoreCharts(charts: CatalogChart[], scores: ScoreRecord[]): ScoreRecord[] {
