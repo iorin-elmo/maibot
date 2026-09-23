@@ -153,6 +153,9 @@ function makeFreeSyncScriptWithHeader(baseUrl: string, token: string): string {
     )
     .replace(',status=', ',integer=value=>{const match=String(value??"").match(/\\d[\\d,]*/);if(!match)return undefined;const parsed=Number(match[0].replace(/,/g,""));return Number.isInteger(parsed)?parsed:undefined},status=')
     .replace('dxScore=number(', 'dxScore=integer(')
+    // A real chart intentionally has no title.  Its empty string is the
+    // catalogue key, so do not discard it while scraping a score page.
+    .replace('if(!title||achievements===undefined||!raw)', 'if(title===undefined||achievements===undefined||!raw)')
     .replace('headers:{"Content-Type":"application/json"}', 'headers:{"Content-Type":"application/json","X-Import-Token":token}')
     .replace('JSON.stringify({token,playerName', 'JSON.stringify({playerName')
     .replace('fetch(url)', 'fetch(url,{redirect:"error"})')
