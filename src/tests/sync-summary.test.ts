@@ -102,3 +102,13 @@ test("an FDX-only improvement appears in the lamp updates", () => {
   const fields = syncSummaryEmbed(summary).toJSON().fields ?? [];
   assert.match(fields.find((field) => field.name === "ランプ更新")?.value ?? "", /FS → FDX/);
 });
+
+test("a combined combo and sync improvement retains both lamp transitions", () => {
+  const previous = [{ title: "Both", difficulty: "MASTER", level: "14", achievements: 100, comboStatus: "FC" as const, syncStatus: "FS" as const, rating: 300, chartKind: "new" as const, chartType: "dx" as const }];
+  const current = [{ ...previous[0], comboStatus: "AP" as const, syncStatus: "FDX" as const }];
+  const summary = createSyncSummary(account, previous, "Player", 1000, current);
+  const fields = syncSummaryEmbed(summary).toJSON().fields ?? [];
+  const lampUpdate = fields.find((field) => field.name === "ランプ更新")?.value ?? "";
+  assert.match(lampUpdate, /FC → AP/);
+  assert.match(lampUpdate, /FS → FDX/);
+});

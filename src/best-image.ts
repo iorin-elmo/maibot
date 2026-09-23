@@ -227,8 +227,12 @@ function syncImageItems(kind: "rank" | "star" | "lamp", updates: SyncChartUpdate
       score, topLeft: `Lv.${score.level ?? "?"}`, topRight: `☆${starOf(previous)}→${starOf(score)}`,
       detail: `${previous?.dxScore ?? 0} → ${score.dxScore ?? 0} (+${dxScoreGain ?? 0})/${score.dxScoreMax ?? "?"}`
     };
-    const previousLamp = comboImproved ? previous?.comboStatus ?? "-" : previous?.syncStatus ?? "-";
-    const currentLamp = comboImproved ? score.comboStatus ?? "-" : score.syncStatus ?? "-";
+    const previousLamp = comboImproved && syncImproved
+      ? `${previous?.comboStatus ?? "-"} / ${previous?.syncStatus ?? "-"}`
+      : comboImproved ? previous?.comboStatus ?? "-" : previous?.syncStatus ?? "-";
+    const currentLamp = comboImproved && syncImproved
+      ? `${score.comboStatus ?? "-"} / ${score.syncStatus ?? "-"}`
+      : comboImproved ? score.comboStatus ?? "-" : score.syncStatus ?? "-";
     return {
       score, topLeft: previousLamp, topRight: currentLamp,
       detail: `${formatAchievement(previous?.achievements)} → ${formatAchievement(score.achievements)} (+${achievementGain?.toFixed(4) ?? "0.0000"}%)`
