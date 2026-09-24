@@ -164,7 +164,10 @@ export class MaimaiCatalog {
       const entry = score.chartType
         ? index.get(this.key(score.title, score.chartType, score.difficulty, score.level))
         : undefined;
-      if (score.chartKind === "unknown" && (newestVersions.size !== 2 || !entry || !entry.version || !knownVersions.has(entry.version) || score.achievements === undefined)) {
+      // A recently added or otherwise unlisted chart must not make an entire
+      // free-course import fail. Keep it as "unknown" until the catalogue
+      // catches up; charts we can identify still receive their metadata.
+      if (score.chartKind === "unknown" && entry && (newestVersions.size !== 2 || !entry.version || !knownVersions.has(entry.version) || score.achievements === undefined)) {
         throw new Error(`譜面定数またはバージョンを照合できませんでした: ${score.title}`);
       }
       if (!entry) return score;
