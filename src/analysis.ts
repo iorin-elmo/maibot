@@ -1,4 +1,4 @@
-import type { ChartKind, ImportedProfile, ScoreRecord } from "./types.js";
+import type { ChartKind, ComboStatus, ImportedProfile, ScoreRecord } from "./types.js";
 
 export function chartKindOf(score: ScoreRecord): ChartKind {
   return score.chartKind === "new" || score.chartKind === "old" ? score.chartKind : "unknown";
@@ -35,13 +35,16 @@ export function achievementRank(achievement: number | undefined): string {
   return "D";
 }
 
-export function singleChartRating(internalLevel: number, achievement: number): number {
-  const coefficient = achievement >= 100.5 ? 22.4 : achievement >= 100 ? 21.6 : achievement >= 99.5 ? 21.1
-    : achievement >= 99 ? 20.8 : achievement >= 98 ? 20.3 : achievement >= 97 ? 20 : achievement >= 94 ? 16.8
-      : achievement >= 90 ? 15.2 : achievement >= 80 ? 13.6 : achievement >= 75 ? 12 : achievement >= 70 ? 11.2
-        : achievement >= 60 ? 9.6 : achievement >= 50 ? 8 : achievement >= 40 ? 7 : achievement >= 30 ? 6
-          : achievement >= 20 ? 5 : achievement >= 10 ? 4 : 0;
-  return Math.floor(internalLevel * Math.min(achievement, 100.5) * coefficient / 100);
+export function singleChartRating(internalLevel: number, achievement: number, comboStatus?: ComboStatus): number {
+  const coefficient = achievement >= 100.5 ? 22.4 : achievement >= 100.4999 ? 22.2 : achievement >= 100 ? 21.6
+    : achievement >= 99.9999 ? 21.4 : achievement >= 99.5 ? 21.1 : achievement >= 99 ? 20.8
+      : achievement >= 98.99 ? 20.6 : achievement >= 98 ? 20.3 : achievement >= 97 ? 20
+        : achievement >= 96.99 ? 17.6 : achievement >= 94 ? 16.8 : achievement >= 90 ? 15.2
+          : achievement >= 80 ? 13.6 : achievement >= 75 ? 12.8 : achievement >= 70 ? 11.2
+            : achievement >= 60 ? 9.6 : achievement >= 50 ? 8 : achievement >= 40 ? 6.4
+              : achievement >= 30 ? 4.8 : achievement >= 20 ? 3.2 : achievement >= 10 ? 1.6 : 0;
+  const baseRating = Math.floor(internalLevel * Math.min(achievement, 100.5) * coefficient / 100);
+  return baseRating + (comboStatus === "AP" || comboStatus === "AP+" ? 1 : 0);
 }
 
 const nextRankThresholds = [50, 60, 70, 75, 80, 90, 94, 97, 98, 99, 99.5, 100, 100.5];
@@ -129,7 +132,7 @@ export function bestCandidates(scores: ScoreRecord[], kind: "new" | "old", limit
     const alreadyInBest = bestSet.has(score);
     const upgrade = nextRankThresholds
       .filter((threshold) => threshold > score.achievements!)
-      .map((achievement) => ({ achievement, rating: singleChartRating(score.internalLevel!, achievement) }))
+      .map((achievement) => ({ achievement, rating: singleChartRating(score.internalLevel!, achievement, score.comboStatus) }))
       .find(({ rating }) => alreadyInBest
         ? rating > score.rating
         : lowestBestRating === undefined || rating > lowestBestRating);

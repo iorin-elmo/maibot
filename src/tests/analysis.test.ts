@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bestCandidates, bestScores, dxScorePercent, dxStar, dxStarCandidates, totalBestRating, validateProfile } from "../analysis.js";
+import { bestCandidates, bestScores, dxScorePercent, dxStar, dxStarCandidates, singleChartRating, totalBestRating, validateProfile } from "../analysis.js";
 
 test("new/old ごとにレート順でベストを切り出す", () => {
   const scores = [
@@ -15,6 +15,15 @@ test("new/old ごとにレート順でベストを切り出す", () => {
 test("不正なプロフィールJSONを拒否する", () => {
   assert.throws(() => validateProfile({ playerName: "x", rating: 1, scores: [{ title: "x", difficulty: "M" }] }));
   assert.throws(() => validateProfile({ playerName: "x".repeat(101), rating: 1, scores: [] }), /100文字以内/);
+});
+
+test("楽曲レートは細かな達成率境界とAPボーナスを反映する", () => {
+  assert.equal(singleChartRating(14, 100.4999), 312);
+  assert.equal(singleChartRating(14, 100.5), 315);
+  assert.equal(singleChartRating(14, 100.5, "AP"), 316);
+  assert.equal(singleChartRating(14, 100.5, "AP+"), 316);
+  assert.equal(singleChartRating(14, 99.9999), 299);
+  assert.equal(singleChartRating(14, 96.99), 238);
 });
 
 test("候補は枠入り時に押し出される最低レートを基準にする", () => {

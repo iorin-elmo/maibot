@@ -188,7 +188,7 @@ export class MaimaiCatalog {
           ? (newestVersions.has(entry.version) ? "new" : "old")
           : score.chartKind,
         internalLevel: entry.internalLevel,
-        rating: singleChartRating(entry.internalLevel, score.achievements)
+        rating: singleChartRating(entry.internalLevel, score.achievements, score.comboStatus)
       };
     });
   }
