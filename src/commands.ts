@@ -98,8 +98,16 @@ export async function handleMaimaiAutocomplete(interaction: import("discord.js")
   const focused = interaction.options.getFocused(true);
   if (focused.name !== "version") return;
   const query = String(focused.value).trim();
-  const matches = plateVersions
-    .filter((version) => !query || version.name.startsWith(query) || version.name.includes(query) || version.label.includes(query))
+  // Discord allows only 25 autocomplete choices.  Keep the special 舞 plate
+  // and the newest 24 versions visible before the user starts typing; older
+  // plates remain discoverable by their name or label.
+  const candidates = query
+    ? plateVersions.filter((version) => version.name.startsWith(query) || version.name.includes(query) || version.label.includes(query))
+    : [
+        ...plateVersions.filter((version) => version.name === "舞"),
+        ...plateVersions.filter((version) => version.name !== "舞").slice(-24)
+      ];
+  const matches = candidates
     .slice(0, 25)
     .map((version) => ({ name: `${version.name} — ${version.label}`, value: version.name }));
   await interaction.respond(matches);
