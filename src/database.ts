@@ -153,7 +153,7 @@ export class BotDatabase {
     return token;
   }
 
-  /** Creates the one-time setup secret used by a user's persistent bookmarklet. */
+  /** Creates the long-lived bearer token embedded in a user's persistent bookmarklet. */
   createPersistentSyncToken(discordUserId: string, notification: { channelId: string; wantsImage: boolean }, reset = false): { token?: string; created: boolean } {
     this.ensureAccount(discordUserId);
     if (reset) this.db.prepare("DELETE FROM import_tokens WHERE discord_user_id = ? AND persistent = 1").run(discordUserId);
