@@ -73,6 +73,37 @@ test("真将 is explicitly rejected as a nonexistent plate", async () => {
   assert.match(reply?.content ?? "", /真将は存在しない/);
 });
 
+test("difficulty lists charts by constant and then achievement", async () => {
+  let requestedDifficulty: string | undefined;
+  let reply: { embeds?: Array<{ toJSON(): { description?: string } }> } | undefined;
+  const scores = [
+    { title: "Lower", difficulty: "EXPERT", level: "13", internalLevel: 13.7, achievements: 100, rating: 0, chartKind: "old" as const },
+    { title: "Same Constant Lower", difficulty: "EXPERT", level: "14", internalLevel: 14, achievements: 98, rating: 0, chartKind: "old" as const },
+    { title: "Same Constant Higher", difficulty: "EXPERT", level: "14", internalLevel: 14, achievements: 99, rating: 0, chartKind: "old" as const }
+  ];
+  const interaction = {
+    user: { id: "discord-user" }, channelId: "channel",
+    options: {
+      getSubcommand: () => "difficulty",
+      getString: (name: string) => name === "difficulty" ? "EXPERT" : null,
+      getInteger: () => null,
+      getBoolean: () => null
+    },
+    reply: async (message: typeof reply) => { reply = message; }
+  };
+  const catalog = {
+    excludeLocked: async <T>(value: T) => value,
+    enrich: async <T>(value: T) => value,
+    difficultyProgressRanking: async (difficulty: string) => { requestedDifficulty = difficulty; return scores; }
+  };
+  const db = { getAccount: () => ({ rating: 0, playerName: "Tester" }), getDefaultImage: () => false, getDefaultCount: () => undefined, getScores: () => [] };
+  await handleMaimai(interaction as never, db as never, "https://sync.example.com", catalog as never);
+  assert.equal(requestedDifficulty, "EXPERT");
+  const description = reply?.embeds?.[0].toJSON().description ?? "";
+  assert.ok(description.indexOf("Same Constant Higher") < description.indexOf("Same Constant Lower"));
+  assert.ok(description.indexOf("Same Constant Lower") < description.indexOf("Lower"));
+});
+
 test("sync issues one persistent bookmarklet, updates its destination, and sync-reset rotates it", async () => {
   const directory = mkdtempSync(join(tmpdir(), "maibot-command-test-"));
   const db = new BotDatabase(join(directory, "test.sqlite"));
@@ -186,9 +217,13 @@ test("plate and level commands use their required inputs and 30-to-50 count rang
   assert.equal(plateCount?.min_value, 1);
   assert.equal(plateCount?.max_value, 50);
   assert.ok(plate?.options?.find((option) => option.name === "image"));
+  assert.ok(plate?.options?.find((option) => option.name === "difficulty"));
   assert.equal(level?.options?.find((option) => option.name === "level")?.required, true);
   assert.equal(level?.options?.find((option) => option.name === "kind")?.required, true);
   assert.ok(level?.options?.find((option) => option.name === "image"));
+  assert.ok(level?.options?.find((option) => option.name === "difficulty"));
+  const difficulty = command.options.find((option) => option.name === "difficulty");
+  assert.equal(difficulty?.options?.find((option) => option.name === "difficulty")?.required, true);
   assert.ok(command.options.find((option) => option.name === "newconstant")?.options?.find((option) => option.name === "image"));
   assert.ok(command.options.find((option) => option.name === "sync-reset"));
   const settings = command.options.find((option) => option.name === "settings");

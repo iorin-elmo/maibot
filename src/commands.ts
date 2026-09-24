@@ -26,6 +26,15 @@ const newConstantCountOption = (option: SlashCommandIntegerOption) =>
 const levelOption = (option: SlashCommandStringOption) =>
   option.setName("level").setDescription("対象レベル（例: 14、14+）").setRequired(true);
 
+const difficultyOption = (option: SlashCommandStringOption, required = false) =>
+  option.setName("difficulty").setDescription("対象難易度").setRequired(required).addChoices(
+    { name: "緑 BASIC", value: "BASIC" },
+    { name: "黄 ADVANCED", value: "ADVANCED" },
+    { name: "赤 EXPERT", value: "EXPERT" },
+    { name: "紫 MASTER", value: "MASTER" },
+    { name: "白 Re:MASTER", value: "RE:MASTER" }
+  );
+
 const levelProgressKindOption = (option: SlashCommandStringOption) =>
   option.setName("kind").setDescription("未達成の目標").setRequired(true).addChoices(
     ...levelProgressKinds.map((kind) => ({ name: kind, value: kind }))
@@ -65,11 +74,17 @@ export const maimaiCommand = new SlashCommandBuilder()
   .addSubcommand((command) => command.setName("plate").setDescription("プレート取得に足りない譜面を表示")
     .addStringOption(plateVersionOption)
     .addStringOption(plateKindOption)
+    .addStringOption(difficultyOption)
     .addIntegerOption(newConstantCountOption)
     .addBooleanOption(imageOption))
   .addSubcommand((command) => command.setName("level").setDescription("指定レベルの未達成譜面を表示")
     .addStringOption(levelOption)
     .addStringOption(levelProgressKindOption)
+    .addStringOption(difficultyOption)
+    .addIntegerOption(newConstantCountOption)
+    .addBooleanOption(imageOption))
+  .addSubcommand((command) => command.setName("difficulty").setDescription("指定難易度の譜面を定数順に表示")
+    .addStringOption((option) => difficultyOption(option, true))
     .addIntegerOption(newConstantCountOption)
     .addBooleanOption(imageOption))
   .addSubcommand((command) => command.setName("best").setDescription("ベスト枠を表示します")
@@ -251,8 +266,9 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         { name: "/maimai sync [image]", value: "無料コース向け。version別スコアからBest 50を計算して同期。image で同期結果をジャケット付き画像でも出力" },
         { name: "/maimai sync-reset", value: "恒久同期ブックマークを無効化して作り直す" },
         { name: "/maimai newconstant [count] [image]", value: "新曲（最新2バージョン）のDX/STD譜面を定数が高い順に表示。image でジャケット画像、既定30件・最大50件" },
-        { name: "/maimai plate <version> <kind> [count] [image]", value: "指定プレートに不足している譜面を定数が高い順に表示。version は 熊・彩など、kind は 神・極・将・舞舞。image でジャケット画像" },
-        { name: "/maimai level <level> <kind> [count] [image]", value: "指定レベルの未AP+/AP/SSS+/SSS/SS+/SS/S+/S/FC+/FC/FDXを達成率順に表示。image でジャケット画像" },
+        { name: "/maimai plate <version> <kind> [difficulty] [count] [image]", value: "指定プレートに不足している譜面を定数が高い順に表示。difficulty で難易度を絞り込み可能" },
+        { name: "/maimai level <level> <kind> [difficulty] [count] [image]", value: "指定レベルの未達成譜面を達成率順に表示。difficulty で難易度を絞り込み可能" },
+        { name: "/maimai difficulty <difficulty> [count] [image]", value: "指定難易度の全譜面を譜面定数順、同じ定数では達成率順に表示" },
         { name: "/maimai best [kind] [image]", value: "PC向けの詳しいベスト枠表示。image を有効にするとジャケット付きカード画像" },
         { name: "/maimai mbest [kind]", value: "スマホ向けの短いベスト枠表示" },
         { name: "/maimai image [kind]", value: "ベスト枠を画像で表示" },
@@ -348,6 +364,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       await interaction.reply({ content: message, ephemeral: true });
       return;
     }
+    const requestedDifficulty = interaction.options.getString("difficulty");
     const count = interaction.options.getInteger("count") ?? defaultCount ?? 30;
     await interaction.deferReply();
     const plateScores = await catalog.plateProgressRanking(plate.versions, allScores, plate.standardOnly, plate.excludedTitles, plate.includeRemaster);
@@ -356,6 +373,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       return;
     }
     const scores = plateScores
+      .filter((score) => !requestedDifficulty || score.difficulty.toUpperCase() === requestedDifficulty)
       .filter((score) => !progressKindSatisfied(score, plate.goal))
       .sort((a, b) => (b.internalLevel ?? 0) - (a.internalLevel ?? 0)
         || (b.achievements ?? -Infinity) - (a.achievements ?? -Infinity)
@@ -371,7 +389,8 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       return;
     }
     const descriptions = splitLines(scores.map((score, index) => renderProgressScore(score, index, plate.goal)), 3_900).map(asCodeBlock);
-    const plateSummary = `**${plate.label}の全譜面 ${plateGoalDescription(plate.goal)} に足りない譜面を、譜面定数が高い順に表示します。状態を反映するには \`/maimai sync\` を再実行してください。**\n\n`;
+    const difficultyNote = requestedDifficulty ? `（${requestedDifficulty}のみ）` : "";
+    const plateSummary = `**${plate.label}の全譜面${difficultyNote} ${plateGoalDescription(plate.goal)} に足りない譜面を、譜面定数が高い順に表示します。状態を反映するには \`/maimai sync\` を再実行してください。**\n\n`;
     await interaction.editReply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
       .setColor(0xff5a9e)
       .setTitle(`${playerName} の${plate.name}候補曲${index ? "（続き）" : ""}`)
@@ -382,6 +401,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     if (!catalog) throw new Error("譜面定数データを利用できません。");
     const level = interaction.options.getString("level", true).trim();
     const kind = interaction.options.getString("kind", true) as LevelProgressKind;
+    const requestedDifficulty = interaction.options.getString("difficulty");
     const count = interaction.options.getInteger("count") ?? defaultCount ?? 30;
     await interaction.deferReply();
     const levelScores = await catalog.levelProgressRanking(level, allScores);
@@ -390,6 +410,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       return;
     }
     const scores = levelScores
+      .filter((score) => !requestedDifficulty || score.difficulty.toUpperCase() === requestedDifficulty)
       .filter((score) => !progressKindSatisfied(score, kind))
       .sort((a, b) => (b.achievements ?? -Infinity) - (a.achievements ?? -Infinity)
         || (b.internalLevel ?? 0) - (a.internalLevel ?? 0)
@@ -405,11 +426,36 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       return;
     }
     const descriptions = splitLines(scores.map((score, index) => renderProgressScore(score, index, kind)), 3_900).map(asCodeBlock);
-    const levelSummary = `**Lv.${level} の未${kind}譜面を達成率が高い順に表示します。未プレイは -% です。AP/FC/FDXの状態を反映するには \`/maimai sync\` を再実行してください。**\n\n`;
+    const difficultyNote = requestedDifficulty ? `（${requestedDifficulty}のみ）` : "";
+    const levelSummary = `**Lv.${level}${difficultyNote} の未${kind}譜面を達成率が高い順に表示します。未プレイは -% です。AP/FC/FDXの状態を反映するには \`/maimai sync\` を再実行してください。**\n\n`;
     await interaction.editReply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
       .setColor(0xff5a9e)
       .setTitle(`${playerName} の Lv.${level} 未${kind}一覧${index ? "（続き）" : ""}`)
       .setDescription(`${index ? "" : levelSummary}${description}`)) });
+    return;
+  }
+  if (subcommand === "difficulty") {
+    if (!catalog) throw new Error("譜面定数データを利用できません。");
+    const difficulty = interaction.options.getString("difficulty", true);
+    const count = interaction.options.getInteger("count") ?? defaultCount ?? 30;
+    const scores = (await catalog.difficultyProgressRanking(difficulty, allScores))
+      .sort((a, b) => (b.internalLevel ?? 0) - (a.internalLevel ?? 0)
+        || (b.achievements ?? -Infinity) - (a.achievements ?? -Infinity)
+        || a.title.localeCompare(b.title, "ja"))
+      .slice(0, count);
+    if (!scores.length) {
+      await interaction.reply({ content: `${difficulty} の譜面データを取得できません。カタログを更新してからお試しください。`, ephemeral: true });
+      return;
+    }
+    if (wantsImage) {
+      await replyCardImages(interaction, playerName, `${difficulty}譜面定数順`, newConstantCards(scores), "maimai-difficulty");
+      return;
+    }
+    const descriptions = splitLines(scores.map(renderNewConstantScore), 3_900).map(asCodeBlock);
+    await interaction.reply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
+      .setColor(0xff5a9e)
+      .setTitle(`${playerName} の ${difficulty}譜面定数順${index ? "（続き）" : ""}`)
+      .setDescription(`${index ? "" : `**${difficulty} の全譜面を譜面定数が高い順、同じ定数では達成率が高い順に表示します。未プレイは -% です。**\n\n`}${description}`)) });
     return;
   }
   if (subcommand === "dxscore" || subcommand === "dxstar") {
