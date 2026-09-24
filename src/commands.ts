@@ -53,6 +53,9 @@ export const maimaiCommand = new SlashCommandBuilder()
   .setDescription("maimaiのベスト枠を表示します")
   .setContexts(InteractionContextType.Guild, InteractionContextType.BotDM)
   .addSubcommand((command) => command.setName("help").setDescription("使い方を表示します"))
+  .addSubcommand((command) => command.setName("settings").setDescription("画像表示の既定値を設定します")
+    .addBooleanOption((option) => option.setName("image").setDescription("画像を既定で表示するか（未指定なら現在値を表示）"))
+    .addIntegerOption((option) => option.setName("count").setDescription("一覧の既定表示件数（未指定なら現在値を表示）").setMinValue(1).setMaxValue(50)))
   .addSubcommand((command) => command.setName("sync").setDescription("無料コースのversion別スコアから同期します")
     .addBooleanOption(imageOption))
   .addSubcommand((command) => command.setName("newconstant").setDescription("新曲譜面を定数が高い順に表示します")
@@ -246,14 +249,31 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         { name: "/maimai candidate [kind] [count] [image]", value: "次ランク到達でBestレートが伸びる候補。枠外候補の算出には /maimai sync が必要（既定10件、最大50件）" },
         { name: "/maimai dxscore <level> [count] [image]", value: "指定レベルのDXスコア%順。現在DXスコア / 譜面ごとの最大DXスコアを表示（既定10件、最大50件）" },
         { name: "/maimai dxstar <level> <star> [count] [image]", value: "指定レベルで、次の指定星まであと何DXスコアかが少ない順。star は1〜6（既定10件、最大50件）" },
+        { name: "/maimai settings <image>", value: "画像対応コマンドの画像表示を、ユーザーごとに既定オン／オフへ設定。各コマンドの image 指定はこの値を一度だけ上書き" },
         { name: "kind", value: "新曲 / 旧曲 / 全曲。省略時は全曲。" },
         { name: "詳細", value: "詳細は [https://iorin-elmo.github.io/maibot](https://iorin-elmo.github.io/maibot) をご覧ください。" }
       );
     await interaction.reply({ embeds: [embed], ephemeral: true });
     return;
   }
+  if (subcommand === "settings") {
+    const requestedImage = interaction.options.getBoolean("image");
+    const requestedCount = interaction.options.getInteger("count");
+    if (requestedImage === null && requestedCount === null) {
+      const wantsImage = db.getDefaultImage(interaction.user.id);
+      const count = db.getDefaultCount(interaction.user.id);
+      await interaction.reply({ content: `現在の設定:\n- 既定の画像表示: **${wantsImage ? "オン" : "オフ"}**\n- 既定の表示件数: **${count ?? "コマンドごとの既定値"}**\n\n\`/maimai settings image:true/false count:1〜50\` で変更できます。`, ephemeral: true });
+      return;
+    }
+    if (requestedImage !== null) db.setDefaultImage(interaction.user.id, requestedImage);
+    if (requestedCount !== null) db.setDefaultCount(interaction.user.id, requestedCount);
+    const wantsImage = db.getDefaultImage(interaction.user.id);
+    const count = db.getDefaultCount(interaction.user.id);
+    await interaction.reply({ content: `設定を更新しました。\n- 既定の画像表示: **${wantsImage ? "オン" : "オフ"}**\n- 既定の表示件数: **${count ?? "コマンドごとの既定値"}**\n\n各コマンドの \`image\` / \`count\` 指定は一度だけ上書きします。`, ephemeral: true });
+    return;
+  }
   if (subcommand === "sync") {
-    const wantsImage = interaction.options.getBoolean("image") === true;
+    const wantsImage = interaction.options.getBoolean("image") ?? db.getDefaultImage(interaction.user.id);
     const token = db.createImportToken(interaction.user.id, { channelId: interaction.channelId, wantsImage });
     const bookmarklet = makeFreeBookmarklet(importBaseUrl, token);
     const instructions = "maimai DX NETへログイン済みのブラウザで、任意のページから実行してください。全難易度の楽曲スコアを取得してBest 50を計算します。";
@@ -270,14 +290,15 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     return;
   }
 
-  const wantsImage = subcommand === "image" || interaction.options.getBoolean("image") === true;
+  const wantsImage = subcommand === "image" || (interaction.options.getBoolean("image") ?? db.getDefaultImage(interaction.user.id));
+  const defaultCount = db.getDefaultCount(interaction.user.id);
   const kind = interaction.options.getString("kind") ?? "all";
   const storedScores = db.getScores(interaction.user.id);
   const allScores = catalog ? await catalog.excludeLocked(storedScores) : storedScores;
   const playerName = account.playerName ?? "maimai";
   if (subcommand === "newconstant") {
     if (!catalog) throw new Error("譜面定数データを利用できません。");
-    const count = interaction.options.getInteger("count") ?? 30;
+    const count = interaction.options.getInteger("count") ?? defaultCount ?? 30;
     await interaction.deferReply();
     const scores = (await catalog.newestChartConstantRanking(allScores)).slice(0, count);
     if (!scores.length) {
@@ -305,7 +326,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       await interaction.reply({ content: `バージョン「${version}」を確認できません。候補から選択してください。`, ephemeral: true });
       return;
     }
-    const count = interaction.options.getInteger("count") ?? 30;
+    const count = interaction.options.getInteger("count") ?? defaultCount ?? 30;
     await interaction.deferReply();
     const plateScores = await catalog.plateProgressRanking(plate.versions, allScores, plate.standardOnly, plate.excludedTitles);
     if (!plateScores.length) {
@@ -339,7 +360,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     if (!catalog) throw new Error("譜面定数データを利用できません。");
     const level = interaction.options.getString("level", true).trim();
     const kind = interaction.options.getString("kind", true) as LevelProgressKind;
-    const count = interaction.options.getInteger("count") ?? 30;
+    const count = interaction.options.getInteger("count") ?? defaultCount ?? 30;
     await interaction.deferReply();
     const levelScores = await catalog.levelProgressRanking(level, allScores);
     if (!levelScores.length) {
@@ -371,7 +392,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   }
   if (subcommand === "dxscore" || subcommand === "dxstar") {
     const level = interaction.options.getString("level", true).trim();
-    const count = interaction.options.getInteger("count") ?? 10;
+    const count = interaction.options.getInteger("count") ?? defaultCount ?? 10;
     if (subcommand === "dxscore") {
       const scores = allScores
         .filter((score) => score.level === level && dxScorePercent(score) !== undefined)
@@ -421,7 +442,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   const newBest = bestScores(allScores, "new", 15).map((score, index) => ({ ...score, officialRank: score.officialRank ?? index + 1 }));
   const oldBest = bestScores(allScores, "old", 35).map((score, index) => ({ ...score, officialRank: score.officialRank ?? index + 1 }));
   if (subcommand === "candidate") {
-    const count = interaction.options.getInteger("count") ?? 10;
+    const count = interaction.options.getInteger("count") ?? defaultCount ?? 10;
     const requestedKinds: Array<"new" | "old"> = kind === "new" ? ["new"] : kind === "old" ? ["old"] : ["new", "old"];
     const frameSizes = { new: 15, old: 35 } as const;
     const candidateGroups = requestedKinds.map((candidateKind) => ({

@@ -34,7 +34,9 @@ export class BotDatabase {
         sega_id TEXT NOT NULL UNIQUE,
         player_name TEXT,
         rating REAL,
-        updated_at TEXT
+        updated_at TEXT,
+        default_image INTEGER NOT NULL DEFAULT 0,
+        default_count INTEGER CHECK(default_count BETWEEN 1 AND 50)
       ) STRICT;
       CREATE TABLE IF NOT EXISTS scores (
         discord_user_id TEXT NOT NULL REFERENCES accounts(discord_user_id) ON DELETE CASCADE,
@@ -88,6 +90,8 @@ export class BotDatabase {
     try { this.db.exec("ALTER TABLE import_tokens ADD COLUMN notification_channel_id TEXT"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE import_tokens ADD COLUMN notification_image INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE sync_notifications ADD COLUMN delivery_attempts INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
+    try { this.db.exec("ALTER TABLE accounts ADD COLUMN default_image INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
+    try { this.db.exec("ALTER TABLE accounts ADD COLUMN default_count INTEGER CHECK(default_count BETWEEN 1 AND 50)"); } catch { /* existing database */ }
     this.db.prepare("DELETE FROM dead_sync_notifications WHERE discarded_at < ?").run(Date.now() - DEAD_SYNC_NOTIFICATION_RETENTION_MS);
   }
 
@@ -109,6 +113,30 @@ export class BotDatabase {
 
   getAccount(discordUserId: string): LinkedAccount | undefined {
     return this.db.prepare("SELECT discord_user_id AS discordUserId, sega_id AS segaId, player_name AS playerName, rating, updated_at AS updatedAt FROM accounts WHERE discord_user_id = ?").get(discordUserId) as LinkedAccount | undefined;
+  }
+
+  getDefaultImage(discordUserId: string): boolean {
+    const account = this.db.prepare("SELECT default_image AS defaultImage FROM accounts WHERE discord_user_id = ?")
+      .get(discordUserId) as { defaultImage: number } | undefined;
+    return account?.defaultImage === 1;
+  }
+
+  getDefaultCount(discordUserId: string): number | undefined {
+    const account = this.db.prepare("SELECT default_count AS defaultCount FROM accounts WHERE discord_user_id = ?")
+      .get(discordUserId) as { defaultCount: number | null } | undefined;
+    return account?.defaultCount ?? undefined;
+  }
+
+  setDefaultImage(discordUserId: string, wantsImage: boolean): void {
+    this.ensureAccount(discordUserId);
+    this.db.prepare("UPDATE accounts SET default_image = ? WHERE discord_user_id = ?")
+      .run(wantsImage ? 1 : 0, discordUserId);
+  }
+
+  setDefaultCount(discordUserId: string, count: number): void {
+    this.ensureAccount(discordUserId);
+    this.db.prepare("UPDATE accounts SET default_count = ? WHERE discord_user_id = ?")
+      .run(count, discordUserId);
   }
 
   createImportToken(discordUserId: string, notification?: { channelId: string; wantsImage: boolean }): string {

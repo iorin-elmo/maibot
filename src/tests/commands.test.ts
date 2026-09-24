@@ -93,6 +93,9 @@ test("plate and level commands use their required inputs and 30-to-50 count rang
   assert.equal(level?.options?.find((option) => option.name === "kind")?.required, true);
   assert.ok(level?.options?.find((option) => option.name === "image"));
   assert.ok(command.options.find((option) => option.name === "newconstant")?.options?.find((option) => option.name === "image"));
+  const settings = command.options.find((option) => option.name === "settings");
+  assert.ok(settings?.options?.find((option) => option.name === "image" && !option.required));
+  assert.ok(settings?.options?.find((option) => option.name === "count" && !option.required));
 });
 
 test("new constant and progress cards retain the requested score details", () => {
