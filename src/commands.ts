@@ -277,7 +277,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     const wantsImage = interaction.options.getBoolean("image") ?? db.getDefaultImage(interaction.user.id);
     const persistent = db.createPersistentSyncToken(interaction.user.id, { channelId: interaction.channelId, wantsImage }, interaction.options.getBoolean("reset") === true);
     if (!persistent.created) {
-      await interaction.reply({ content: "Your persistent `maibot` bookmark is ready. Run it on maimai DX NET to sync. This channel is now the notification destination; use `/maimai sync reset:true` to create a new bookmarklet.", ephemeral: true });
+      await interaction.reply({ content: "恒久ブックマーク `maibot` は作成済みです。maimai DX NET上で実行すると同期できます。このチャンネルを同期結果の通知先に更新しました。ブックマークを作り直す場合は `/maimai sync reset:true` を実行してください。", ephemeral: true });
       return;
     }
     const token = persistent.token!;
