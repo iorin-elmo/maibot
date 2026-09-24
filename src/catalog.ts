@@ -274,8 +274,8 @@ export class MaimaiCatalog {
     return this.scoreCharts(charts.filter((chart) => chart.level === level), scores);
   }
 
-  /** Lists the BASIC through MASTER charts that count toward a plate. */
-  async plateProgressRanking(versions: readonly string[], scores: ScoreRecord[], standardOnly = false, excludedTitles: readonly string[] = []): Promise<ScoreRecord[]> {
+  /** Lists the charts that count toward a plate; Re:MASTER is included only where required. */
+  async plateProgressRanking(versions: readonly string[], scores: ScoreRecord[], standardOnly = false, excludedTitles: readonly string[] = [], includeRemaster = false): Promise<ScoreRecord[]> {
     const { charts, knownVersions } = await this.load(true);
     if (versions.some((version) => !knownVersions.has(version))) throw new Error("プレートのバージョン情報を照合できませんでした。");
     const targetVersions = new Set(versions);
@@ -283,7 +283,7 @@ export class MaimaiCatalog {
     return this.scoreCharts(charts.filter((chart) => chart.version !== undefined
       && targetVersions.has(chart.version)
       && !excluded.has(chart.title)
-      && normalizeDifficulty(chart.difficulty) !== "remaster"
+      && (includeRemaster || normalizeDifficulty(chart.difficulty) !== "remaster")
       && (!standardOnly || chart.chartType === "standard")), scores);
   }
 }

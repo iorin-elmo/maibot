@@ -339,7 +339,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     }
     const count = interaction.options.getInteger("count") ?? defaultCount ?? 30;
     await interaction.deferReply();
-    const plateScores = await catalog.plateProgressRanking(plate.versions, allScores, plate.standardOnly, plate.excludedTitles);
+    const plateScores = await catalog.plateProgressRanking(plate.versions, allScores, plate.standardOnly, plate.excludedTitles, plate.includeRemaster);
     if (!plateScores.length) {
       await interaction.editReply(`${plate.name} の対象譜面データを取得できません。カタログを更新してからお試しください。`);
       return;
