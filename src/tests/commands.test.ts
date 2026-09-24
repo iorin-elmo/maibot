@@ -104,6 +104,33 @@ test("difficulty lists charts by constant and then achievement", async () => {
   assert.ok(description.indexOf("Same Constant Lower") < description.indexOf("Lower"));
 });
 
+test("level and plate report an empty difficulty filter instead of false completion", async () => {
+  const score = { title: "MASTER only", difficulty: "MASTER", level: "13", internalLevel: 13, rating: 0, chartKind: "old" as const };
+  const catalog = {
+    excludeLocked: async <T>(value: T) => value,
+    enrich: async <T>(value: T) => value,
+    levelProgressRanking: async () => [score],
+    plateProgressRanking: async () => [score]
+  };
+  const db = { getAccount: () => ({ rating: 0, playerName: "Tester" }), getDefaultImage: () => false, getDefaultCount: () => undefined, getScores: () => [] };
+  for (const subcommand of ["level", "plate"] as const) {
+    let reply = "";
+    const interaction = {
+      user: { id: "discord-user" }, channelId: "channel",
+      options: {
+        getSubcommand: () => subcommand,
+        getString: (name: string) => name === "difficulty" ? "RE:MASTER" : name === "level" ? "13" : name === "version" ? "熊" : subcommand === "plate" ? "神" : "AP",
+        getInteger: () => null,
+        getBoolean: () => null
+      },
+      deferReply: async () => {},
+      editReply: async (message: string) => { reply = message; }
+    };
+    await handleMaimai(interaction as never, db as never, "https://sync.example.com", catalog as never);
+    assert.match(reply, /RE:MASTER.*(?:対象譜面|譜面).*ありません/);
+  }
+});
+
 test("sync issues one persistent bookmarklet, updates its destination, and sync-reset rotates it", async () => {
   const directory = mkdtempSync(join(tmpdir(), "maibot-command-test-"));
   const db = new BotDatabase(join(directory, "test.sqlite"));

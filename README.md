@@ -9,8 +9,8 @@ maimai DX NETの無料コースのスコアを同期し、DiscordでBest 50を�
 | `/maimai sync [image]` | 無料コース向け。全難易度の楽曲スコアからBest 50を計算して同期し、実行したチャンネルに差分を通知。`image` でジャケット付き画像も出力 |
 | `/maimai sync-reset` | 恒久同期ブックマークを無効化して、新しいブックマークを発行 |
 | `/maimai newconstant [count] [image]` | 新曲（最新2バージョン）のDX/STD譜面を譜面定数順に表示。未プレイは `-%`、既定30件・最大50件 |
-| `/maimai plate <version> <kind> [count] [image]` | 指定プレートに不足する譜面を定数順に表示。`version` は熊・彩など、`kind` は神・極・将・舞舞、既定30件・最大50件 |
-| `/maimai level <level> <kind> [count] [image]` | 指定レベルの未AP+/AP/SSS+/SSS/SS+/SS/S+/S/FC+/FC/FDXを達成率順に表示、既定30件・最大50件 |
+| `/maimai plate <version> <kind> [difficulty] [count] [image]` | 指定プレートに不足する譜面を定数順に表示。`version` は熊・彩など、`kind` は神・極・将・舞舞、既定30件・最大50件 |
+| `/maimai level <level> <kind> [difficulty] [count] [image]` | 指定レベルの未AP+/AP/SSS+/SSS/SS+/SS/S+/S/FC+/FC/FDXを達成率順に表示、既定30件・最大50件 |
 | `/maimai difficulty <difficulty> [count] [image]` | 指定難易度（BASIC/ADVANCED/EXPERT/MASTER/Re:MASTER）の全譜面を、譜面定数順・同じ定数では達成率順に表示、既定30件・最大50件 |
 | `/maimai help` | 使い方を表示 |
 | `/maimai best [kind]` | 定数・単曲レート・達成率を含むベスト枠を表示 |

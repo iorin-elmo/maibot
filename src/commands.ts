@@ -379,8 +379,13 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       await interaction.editReply(`${plate.name} の対象譜面データを取得できません。カタログを更新してからお試しください。`);
       return;
     }
-    const scores = plateScores
-      .filter((score) => !requestedDifficulty || score.difficulty.toUpperCase() === requestedDifficulty)
+    const difficultyScores = plateScores
+      .filter((score) => !requestedDifficulty || score.difficulty.toUpperCase() === requestedDifficulty);
+    if (!difficultyScores.length) {
+      await interaction.editReply(`${plate.name} に ${requestedDifficulty} の対象譜面はありません。`);
+      return;
+    }
+    const scores = difficultyScores
       .filter((score) => !progressKindSatisfied(score, plate.goal))
       .sort((a, b) => (b.internalLevel ?? 0) - (a.internalLevel ?? 0)
         || (b.achievements ?? -Infinity) - (a.achievements ?? -Infinity)
@@ -416,8 +421,13 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       await interaction.editReply(`Lv.${level} の譜面が見つかりません。レベル表記を確認してください。`);
       return;
     }
-    const scores = levelScores
-      .filter((score) => !requestedDifficulty || score.difficulty.toUpperCase() === requestedDifficulty)
+    const difficultyScores = levelScores
+      .filter((score) => !requestedDifficulty || score.difficulty.toUpperCase() === requestedDifficulty);
+    if (!difficultyScores.length) {
+      await interaction.editReply(`Lv.${level} に ${requestedDifficulty} の譜面はありません。`);
+      return;
+    }
+    const scores = difficultyScores
       .filter((score) => !progressKindSatisfied(score, kind))
       .sort((a, b) => (b.achievements ?? -Infinity) - (a.achievements ?? -Infinity)
         || (b.internalLevel ?? 0) - (a.internalLevel ?? 0)
