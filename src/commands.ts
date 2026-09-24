@@ -342,7 +342,10 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     const kind = interaction.options.getString("kind", true) as PlateKind;
     const plate = plateByVersionAndKind(version, kind);
     if (!plate) {
-      await interaction.reply({ content: `バージョン「${version}」を確認できません。候補から選択してください。`, ephemeral: true });
+      const message = version === "真" && kind === "将"
+        ? "真将は存在しないプレートです。真極・真神・真舞舞を選択してください。"
+        : `バージョン「${version}」を確認できません。候補から選択してください。`;
+      await interaction.reply({ content: message, ephemeral: true });
       return;
     }
     const count = interaction.options.getInteger("count") ?? defaultCount ?? 30;

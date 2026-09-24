@@ -56,6 +56,23 @@ test("plate autocomplete prioritizes 舞 and 廻 within Discord's 25-choice limi
   assert.deepEqual(typedResponses.map((choice) => choice.value), ["真"]);
 });
 
+test("真将 is explicitly rejected as a nonexistent plate", async () => {
+  let reply: { content?: string } | undefined;
+  const interaction = {
+    user: { id: "discord-user" }, channelId: "channel",
+    options: {
+      getSubcommand: () => "plate",
+      getString: (name: string) => name === "version" ? "真" : "将",
+      getInteger: () => null,
+      getBoolean: () => null
+    },
+    reply: async (message: { content?: string }) => { reply = message; }
+  };
+  const catalog = { excludeLocked: async <T>(scores: T) => scores, enrich: async <T>(scores: T) => scores };
+  await handleMaimai(interaction as never, { getAccount: () => ({ rating: 0 }), getDefaultImage: () => false, getDefaultCount: () => undefined, getScores: () => [] } as never, "https://sync.example.com", catalog as never);
+  assert.match(reply?.content ?? "", /真将は存在しない/);
+});
+
 test("sync issues one persistent bookmarklet, updates its destination, and sync-reset rotates it", async () => {
   const directory = mkdtempSync(join(tmpdir(), "maibot-command-test-"));
   const db = new BotDatabase(join(directory, "test.sqlite"));
