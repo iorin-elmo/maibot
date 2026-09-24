@@ -10,6 +10,12 @@ test("プロフィールの再インポートは前のスコアを置き換え�
   const db = new BotDatabase(join(directory, "test.sqlite"));
   try {
     db.link("discord-user", "sega-id");
+    assert.equal(db.getDefaultImage("discord-user"), false);
+    db.setDefaultImage("discord-user", true);
+    assert.equal(db.getDefaultImage("discord-user"), true);
+    assert.equal(db.getDefaultCount("discord-user"), undefined);
+    db.setDefaultCount("discord-user", 25);
+    assert.equal(db.getDefaultCount("discord-user"), 25);
     assert.throws(() => db.link("another-user", "sega-id"));
     const importToken = db.createImportToken("discord-user");
     assert.equal(db.consumeImportToken(importToken), "discord-user");
