@@ -11,6 +11,7 @@ export interface PlateVersion {
   label: string;
   versions: string[];
   standardOnly?: boolean;
+  includeRemaster?: boolean;
   excludedTitles: string[];
 }
 
@@ -20,6 +21,7 @@ export interface PlateDefinition {
   versions: string[];
   goal: PlateGoal;
   standardOnly?: boolean;
+  includeRemaster?: boolean;
   excludedTitles: string[];
 }
 
@@ -64,13 +66,17 @@ export const plateVersions: PlateVersion[] = [
   })),
   {
     name: "舞", label: "FiNALEまでのスタンダード譜面", versions: versionGroups.slice(0, 12).flatMap(([, , versions]) => versions as unknown as string[]),
-    standardOnly: true, excludedTitles: [...excludedFromAllPlates]
+    standardOnly: true, includeRemaster: true, excludedTitles: [...excludedFromAllPlates]
   }
 ];
 
-export const plates: PlateDefinition[] = plateVersions.flatMap((version) => suffixes.map(([suffix, goal]) => ({
+export const plates: PlateDefinition[] = plateVersions.flatMap((version) => suffixes
+  .filter(([suffix]) => version.name !== "真" || suffix !== "将")
+  .map(([suffix, goal]) => ({
   name: `${version.name}${suffix}`, label: version.label, versions: version.versions, goal,
-  ...(version.standardOnly ? { standardOnly: true } : {}), excludedTitles: version.excludedTitles
+  ...(version.standardOnly ? { standardOnly: true } : {}),
+  ...(version.includeRemaster ? { includeRemaster: true } : {}),
+  excludedTitles: version.excludedTitles
 })));
 
 export function plateByName(name: string): PlateDefinition | undefined {

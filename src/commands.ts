@@ -98,8 +98,16 @@ export async function handleMaimaiAutocomplete(interaction: import("discord.js")
   const focused = interaction.options.getFocused(true);
   if (focused.name !== "version") return;
   const query = String(focused.value).trim();
-  const matches = plateVersions
-    .filter((version) => !query || version.name.startsWith(query) || version.name.includes(query) || version.label.includes(query))
+  // Discord allows only 25 autocomplete choices.  Keep the special 舞 plate
+  // and the newest 24 versions visible before the user starts typing; older
+  // plates remain discoverable by their name or label.
+  const candidates = query
+    ? plateVersions.filter((version) => version.name.startsWith(query) || version.name.includes(query) || version.label.includes(query))
+    : [
+        ...plateVersions.filter((version) => version.name === "舞"),
+        ...plateVersions.filter((version) => version.name !== "舞").slice(-24)
+      ];
+  const matches = candidates
     .slice(0, 25)
     .map((version) => ({ name: `${version.name} — ${version.label}`, value: version.name }));
   await interaction.respond(matches);
@@ -334,12 +342,15 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     const kind = interaction.options.getString("kind", true) as PlateKind;
     const plate = plateByVersionAndKind(version, kind);
     if (!plate) {
-      await interaction.reply({ content: `バージョン「${version}」を確認できません。候補から選択してください。`, ephemeral: true });
+      const message = version === "真" && kind === "将"
+        ? "真将は存在しないプレートです。真極・真神・真舞舞を選択してください。"
+        : `バージョン「${version}」を確認できません。候補から選択してください。`;
+      await interaction.reply({ content: message, ephemeral: true });
       return;
     }
     const count = interaction.options.getInteger("count") ?? defaultCount ?? 30;
     await interaction.deferReply();
-    const plateScores = await catalog.plateProgressRanking(plate.versions, allScores, plate.standardOnly, plate.excludedTitles);
+    const plateScores = await catalog.plateProgressRanking(plate.versions, allScores, plate.standardOnly, plate.excludedTitles, plate.includeRemaster);
     if (!plateScores.length) {
       await interaction.editReply(`${plate.name} の対象譜面データを取得できません。カタログを更新してからお試しください。`);
       return;

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { handleMaimai, maimaiCommand, renderCandidate, renderDxScore, renderDxStarCandidate, renderNewConstantScore, renderProgressScore } from "../commands.js";
+import { handleMaimai, handleMaimaiAutocomplete, maimaiCommand, renderCandidate, renderDxScore, renderDxStarCandidate, renderNewConstantScore, renderProgressScore } from "../commands.js";
 import { difficultyAccent, newConstantCards, progressCards, renderScoreCardImages } from "../best-image.js";
 import { BotDatabase } from "../database.js";
 
@@ -34,6 +34,43 @@ test("maimai command is available in bot DMs", () => {
   assert.deepEqual(command.contexts, [0, 1]);
   assert.ok(command.options.find((option) => option.name === "sync")?.options?.some((option) => option.name === "image"));
   assert.ok(!command.options.some((option) => option.name === "fsync"));
+});
+
+test("plate autocomplete prioritizes 舞 and 廻 within Discord's 25-choice limit", async () => {
+  const responses: Array<{ name: string; value: string }> = [];
+  const interaction = {
+    commandName: "maimai",
+    options: {
+      getSubcommand: () => "plate",
+      getFocused: () => ({ name: "version", value: "" })
+    },
+    respond: async (choices: Array<{ name: string; value: string }>) => { responses.push(...choices); }
+  };
+  await handleMaimaiAutocomplete(interaction as never);
+  assert.equal(responses.length, 25);
+  assert.ok(responses.some((choice) => choice.value === "舞"));
+  assert.ok(responses.some((choice) => choice.value === "廻"));
+
+  const typedResponses: Array<{ name: string; value: string }> = [];
+  await handleMaimaiAutocomplete({ ...interaction, options: { ...interaction.options, getFocused: () => ({ name: "version", value: "真" }) }, respond: async (choices: Array<{ name: string; value: string }>) => { typedResponses.push(...choices); } } as never);
+  assert.deepEqual(typedResponses.map((choice) => choice.value), ["真"]);
+});
+
+test("真将 is explicitly rejected as a nonexistent plate", async () => {
+  let reply: { content?: string } | undefined;
+  const interaction = {
+    user: { id: "discord-user" }, channelId: "channel",
+    options: {
+      getSubcommand: () => "plate",
+      getString: (name: string) => name === "version" ? "真" : "将",
+      getInteger: () => null,
+      getBoolean: () => null
+    },
+    reply: async (message: { content?: string }) => { reply = message; }
+  };
+  const catalog = { excludeLocked: async <T>(scores: T) => scores, enrich: async <T>(scores: T) => scores };
+  await handleMaimai(interaction as never, { getAccount: () => ({ rating: 0 }), getDefaultImage: () => false, getDefaultCount: () => undefined, getScores: () => [] } as never, "https://sync.example.com", catalog as never);
+  assert.match(reply?.content ?? "", /真将は存在しない/);
 });
 
 test("sync issues one persistent bookmarklet, updates its destination, and sync-reset rotates it", async () => {

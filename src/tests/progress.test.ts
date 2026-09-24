@@ -4,6 +4,11 @@ import { plateByName, progressKindSatisfied } from "../progress.js";
 
 test("plate names resolve to their version and objective", () => {
   assert.deepEqual(plateByName("熊神"), { name: "熊神", label: "maimai でらっくす", versions: ["maimaiでらっくす"], goal: "AP", excludedTitles: ["前前前世"] });
+  assert.equal(plateByName("真将"), undefined);
+  assert.ok(plateByName("真神")?.excludedTitles.includes("ジングルベル［H.］"));
+  assert.ok(!plateByName("舞神")?.excludedTitles.includes("ジングルベル［H.］"));
+  assert.equal(plateByName("舞神")?.includeRemaster, true);
+  assert.equal(plateByName("輝神")?.includeRemaster, undefined);
   assert.equal(plateByName("存在しない神"), undefined);
 });
 
