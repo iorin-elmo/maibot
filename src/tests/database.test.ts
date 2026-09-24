@@ -16,6 +16,17 @@ test("プロフィールの再インポートは前のスコアを置き換え�
     assert.equal(db.getDefaultCount("discord-user"), undefined);
     db.setDefaultCount("discord-user", 25);
     assert.equal(db.getDefaultCount("discord-user"), 25);
+    const firstBookmark = db.createPersistentSyncToken("discord-user", { channelId: "channel", wantsImage: true });
+    assert.equal(firstBookmark.created, true);
+    assert.ok(firstBookmark.token);
+    const secondBookmark = db.createPersistentSyncToken("discord-user", { channelId: "other-channel", wantsImage: false });
+    assert.deepEqual(secondBookmark, { created: false });
+    const recipient = db.consumeImportTokenWithRecipient(firstBookmark.token!);
+    assert.deepEqual(recipient, { discordUserId: "discord-user", notificationChannelId: "other-channel", wantsImage: false });
+    assert.ok(db.consumeImportTokenWithRecipient(firstBookmark.token!));
+    const resetBookmark = db.createPersistentSyncToken("discord-user", { channelId: "channel", wantsImage: false }, true);
+    assert.equal(resetBookmark.created, true);
+    assert.equal(db.consumeImportTokenWithRecipient(firstBookmark.token!), undefined);
     assert.throws(() => db.link("another-user", "sega-id"));
     const importToken = db.createImportToken("discord-user");
     assert.equal(db.consumeImportToken(importToken), "discord-user");

@@ -58,6 +58,7 @@ export const maimaiCommand = new SlashCommandBuilder()
     .addIntegerOption((option) => option.setName("count").setDescription("一覧の既定表示件数（未指定なら現在値を表示）").setMinValue(1).setMaxValue(50)))
   .addSubcommand((command) => command.setName("sync").setDescription("無料コースのversion別スコアから同期します")
     .addBooleanOption(imageOption))
+  .addSubcommand((command) => command.setName("sync-reset").setDescription("恒久同期ブックマークを作り直します"))
   .addSubcommand((command) => command.setName("newconstant").setDescription("新曲譜面を定数が高い順に表示します")
     .addIntegerOption(newConstantCountOption)
     .addBooleanOption(imageOption))
@@ -240,6 +241,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       .setDescription("`/maimai sync` を実行し、返信のブックマークレットをログイン済みのmaimai DX NET上で実行してください。")
       .addFields(
         { name: "/maimai sync [image]", value: "無料コース向け。version別スコアからBest 50を計算して同期。image で同期結果をジャケット付き画像でも出力" },
+        { name: "/maimai sync-reset", value: "恒久同期ブックマークを無効化して作り直す" },
         { name: "/maimai newconstant [count] [image]", value: "新曲（最新2バージョン）のDX/STD譜面を定数が高い順に表示。image でジャケット画像、既定30件・最大50件" },
         { name: "/maimai plate <version> <kind> [count] [image]", value: "指定プレートに不足している譜面を定数が高い順に表示。version は 熊・彩など、kind は 神・極・将・舞舞。image でジャケット画像" },
         { name: "/maimai level <level> <kind> [count] [image]", value: "指定レベルの未AP+/AP/SSS+/SSS/SS+/SS/S+/S/FC+/FC/FDXを達成率順に表示。image でジャケット画像" },
@@ -272,13 +274,18 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
     await interaction.reply({ content: `設定を更新しました。\n- 既定の画像表示: **${wantsImage ? "オン" : "オフ"}**\n- 既定の表示件数: **${count ?? "コマンドごとの既定値"}**\n\n各コマンドの \`image\` / \`count\` 指定は一度だけ上書きします。`, ephemeral: true });
     return;
   }
-  if (subcommand === "sync") {
+  if (subcommand === "sync" || subcommand === "sync-reset") {
     const wantsImage = interaction.options.getBoolean("image") ?? db.getDefaultImage(interaction.user.id);
-    const token = db.createImportToken(interaction.user.id, { channelId: interaction.channelId, wantsImage });
+    const persistent = db.createPersistentSyncToken(interaction.user.id, { channelId: interaction.channelId, wantsImage }, subcommand === "sync-reset");
+    if (!persistent.created) {
+      await interaction.reply({ content: "恒久ブックマーク `maibot` は作成済みです。maimai DX NET上で実行すると同期できます。このチャンネルを同期結果の通知先に更新しました。ブックマークを作り直す場合は `/maimai sync-reset` を実行してください。", ephemeral: true });
+      return;
+    }
+    const token = persistent.token!;
     const bookmarklet = makeFreeBookmarklet(importBaseUrl, token);
     const instructions = "maimai DX NETへログイン済みのブラウザで、任意のページから実行してください。全難易度の楽曲スコアを取得してBest 50を計算します。";
     await interaction.reply({
-      content: `下のコード全体をコピーして、ブラウザのブックマークURL欄に貼り付けてください。${instructions}\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのリンクは10分間・1回だけ有効です。SEGA ID・パスワードは送信されません。同期が終わると、このチャンネルに結果を通知します。`,
+      content: `下のコード全体をコピーして名前を \`maibot\` としたブックマークのURL欄に貼り付けてください。以後はmaimai DX NET上でそのブックマークを実行するだけで同期できます。${instructions}\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのブックマークはあなた専用です。共有しないでください。作り直す場合は \`/maimai sync-reset\` を実行してください。`,
       ephemeral: true
     });
     return;

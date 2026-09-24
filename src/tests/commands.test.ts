@@ -1,13 +1,73 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
-import { maimaiCommand, renderCandidate, renderDxScore, renderDxStarCandidate, renderNewConstantScore, renderProgressScore } from "../commands.js";
+import { handleMaimai, maimaiCommand, renderCandidate, renderDxScore, renderDxStarCandidate, renderNewConstantScore, renderProgressScore } from "../commands.js";
 import { difficultyAccent, newConstantCards, progressCards, renderScoreCardImages } from "../best-image.js";
+import { BotDatabase } from "../database.js";
+
+function syncInteraction(subcommand: "sync" | "sync-reset", channelId: string, image: boolean | null = null) {
+  const replies: Array<{ content?: string; ephemeral?: boolean }> = [];
+  return {
+    interaction: {
+      user: { id: "discord-user" },
+      channelId,
+      options: {
+        getSubcommand: () => subcommand,
+        getBoolean: (name: string) => name === "image" ? image : null
+      },
+      reply: async (message: { content?: string; ephemeral?: boolean }) => { replies.push(message); }
+    },
+    replies
+  };
+}
+
+function bookmarkToken(content: string): string {
+  const match = content.match(/"X-Import-Token":"([A-Za-z0-9_-]+)"/);
+  assert.ok(match);
+  return match[1];
+}
 
 test("maimai command is available in bot DMs", () => {
   const command = maimaiCommand.toJSON() as { contexts?: number[]; options: Array<{ name: string; options?: Array<{ name: string }> }> };
   assert.deepEqual(command.contexts, [0, 1]);
   assert.ok(command.options.find((option) => option.name === "sync")?.options?.some((option) => option.name === "image"));
   assert.ok(!command.options.some((option) => option.name === "fsync"));
+});
+
+test("sync issues one persistent bookmarklet, updates its destination, and sync-reset rotates it", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "maibot-command-test-"));
+  const db = new BotDatabase(join(directory, "test.sqlite"));
+  try {
+    const first = syncInteraction("sync", "first-channel", true);
+    await handleMaimai(first.interaction as never, db, "https://sync.example.com");
+    assert.equal(first.replies.length, 1);
+    const firstToken = bookmarkToken(first.replies[0].content ?? "");
+    assert.deepEqual(db.consumeImportTokenWithRecipient(firstToken), {
+      discordUserId: "discord-user", notificationChannelId: "first-channel", wantsImage: true
+    });
+
+    const repeated = syncInteraction("sync", "second-channel", false);
+    await handleMaimai(repeated.interaction as never, db, "https://sync.example.com");
+    assert.match(repeated.replies[0].content ?? "", /作成済み/);
+    assert.doesNotMatch(repeated.replies[0].content ?? "", /javascript:/);
+    assert.deepEqual(db.consumeImportTokenWithRecipient(firstToken), {
+      discordUserId: "discord-user", notificationChannelId: "second-channel", wantsImage: false
+    });
+
+    const reset = syncInteraction("sync-reset", "reset-channel");
+    await handleMaimai(reset.interaction as never, db, "https://sync.example.com");
+    const resetToken = bookmarkToken(reset.replies[0].content ?? "");
+    assert.notEqual(resetToken, firstToken);
+    assert.equal(db.consumeImportTokenWithRecipient(firstToken), undefined);
+    assert.deepEqual(db.consumeImportTokenWithRecipient(resetToken), {
+      discordUserId: "discord-user", notificationChannelId: "reset-channel", wantsImage: false
+    });
+  } finally {
+    db.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("候補表示は達成率とランクの桁数に関係なく列がそろう", () => {
@@ -93,6 +153,7 @@ test("plate and level commands use their required inputs and 30-to-50 count rang
   assert.equal(level?.options?.find((option) => option.name === "kind")?.required, true);
   assert.ok(level?.options?.find((option) => option.name === "image"));
   assert.ok(command.options.find((option) => option.name === "newconstant")?.options?.find((option) => option.name === "image"));
+  assert.ok(command.options.find((option) => option.name === "sync-reset"));
   const settings = command.options.find((option) => option.name === "settings");
   assert.ok(settings?.options?.find((option) => option.name === "image" && !option.required));
   assert.ok(settings?.options?.find((option) => option.name === "count" && !option.required));
