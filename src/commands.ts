@@ -294,7 +294,11 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   const defaultCount = db.getDefaultCount(interaction.user.id);
   const kind = interaction.options.getString("kind") ?? "all";
   const storedScores = db.getScores(interaction.user.id);
-  const allScores = catalog ? await catalog.excludeLocked(storedScores) : storedScores;
+  const availableScores = catalog ? await catalog.excludeLocked(storedScores) : storedScores;
+  // Older imports can be missing catalogue metadata (for example, if the
+  // upstream catalogue temporarily marked a playable song as locked). Refresh
+  // it for every command so the score becomes usable without a re-sync.
+  const allScores = catalog ? await enrichImageScores(catalog, availableScores) : availableScores;
   const playerName = account.playerName ?? "maimai";
   if (subcommand === "newconstant") {
     if (!catalog) throw new Error("譜面定数データを利用できません。");
