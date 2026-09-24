@@ -16,12 +16,21 @@ function startSyncServer(): void {
   if (!client.isReady()) {
     await new Promise<void>((resolve) => client.once(Events.ClientReady, () => resolve()));
   }
-  const channel = await client.channels.fetch(recipient.notificationChannelId);
-  if (!channel?.isSendable()) throw new Error("Sync notification channel is not sendable");
   const files = recipient.wantsImage
     ? [new AttachmentBuilder(await renderSyncSummaryImage(summary), { name: "maimai-sync-summary.jpg" })]
     : [];
-  await channel.send({ embeds: [syncSummaryEmbed(summary)], files });
+  const message = { embeds: [syncSummaryEmbed(summary)], files };
+  try {
+    const channel = await client.channels.fetch(recipient.notificationChannelId);
+    if (!channel?.isSendable()) throw new Error("Sync notification channel is not sendable");
+    await channel.send(message);
+  } catch (error) {
+    // A user can invoke the command where the bot cannot later view or post
+    // (for example, a private guild channel). Deliver the result by DM.
+    console.warn(`Could not notify sync channel for ${recipient.discordUserId}; falling back to DM`, error);
+    const user = await client.users.fetch(recipient.discordUserId);
+    await user.send(message);
+  }
   });
 }
 

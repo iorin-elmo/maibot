@@ -108,7 +108,9 @@ export class MaimaiCatalog {
       const charts: CatalogChart[] = [];
       const lockedTitles = new Set<string>();
       for (const song of document.songs) {
-        if (song.isLocked || song.sheets.every((sheet) => Array.isArray(sheet.serverIds) && !sheet.serverIds.includes("jp"))) {
+        // `isLocked` can be stale or incorrect for otherwise playable songs.
+        // Per-sheet Japanese server availability is the authoritative signal.
+        if (song.sheets.every((sheet) => Array.isArray(sheet.serverIds) && !sheet.serverIds.includes("jp"))) {
           lockedTitles.add(normalize(song.title));
           continue;
         }

@@ -30,7 +30,7 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
     document = {
       versions: [{ version: "old" }, { version: "new-1" }, { version: "new-2" }],
       songs: [
-        { title: "New", version: "new-1", sheets: [{ type: "dx", difficulty: "MASTER", level: "14", internalLevelValue: 14.2 }] },
+        { title: "New", version: "new-1", isLocked: true, sheets: [{ type: "dx", difficulty: "MASTER", level: "14", internalLevelValue: 14.2 }] },
         { title: "Unplayed", version: "new-2", sheets: [{ type: "dx", difficulty: "EXPERT", level: "14", internalLevelValue: 14.1 }] },
         { title: "UTAGE", version: "new-2", sheets: [{ type: "utage", difficulty: "宴", level: "?", internalLevelValue: 15 }] },
         { title: "Old", version: "old", sheets: [{ type: "dx", difficulty: "EXPERT", level: "13", internalLevelValue: 13.4 }] }
