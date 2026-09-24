@@ -167,7 +167,9 @@ export function validateProfile(value: unknown): ImportedProfile {
   const scores = profile.scores.map((row, index) => {
     if (!row || typeof row !== "object") throw new Error(`scores[${index}] がオブジェクトではありません。`);
     const score = row as Partial<ScoreRecord>;
-    if (typeof score.title !== "string" || !score.title.trim()) throw new Error(`scores[${index}].title が不正です。`);
+    // One official chart intentionally has no title.  An empty string is its
+    // valid catalogue key, while non-string values remain invalid.
+    if (typeof score.title !== "string") throw new Error(`scores[${index}].title が不正です。`);
     if (typeof score.difficulty !== "string" || !score.difficulty.trim()) throw new Error(`scores[${index}].difficulty が不正です。`);
     if (!Number.isFinite(score.rating)) throw new Error(`scores[${index}].rating が不正です。`);
     if (score.achievements !== undefined && !Number.isFinite(score.achievements)) throw new Error(`scores[${index}].achievements が不正です。`);
