@@ -70,7 +70,9 @@ export const plateVersions: PlateVersion[] = [
   }
 ];
 
-export const plates: PlateDefinition[] = plateVersions.flatMap((version) => suffixes.map(([suffix, goal]) => ({
+export const plates: PlateDefinition[] = plateVersions.flatMap((version) => suffixes
+  .filter(([suffix]) => version.name !== "真" || suffix !== "将")
+  .map(([suffix, goal]) => ({
   name: `${version.name}${suffix}`, label: version.label, versions: version.versions, goal,
   ...(version.standardOnly ? { standardOnly: true } : {}),
   ...(version.includeRemaster ? { includeRemaster: true } : {}),
