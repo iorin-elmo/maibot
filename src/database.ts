@@ -60,7 +60,8 @@ export class BotDatabase {
         discord_user_id TEXT NOT NULL REFERENCES accounts(discord_user_id) ON DELETE CASCADE,
         expires_at INTEGER NOT NULL,
         notification_channel_id TEXT,
-        notification_image INTEGER NOT NULL DEFAULT 0
+        notification_image INTEGER NOT NULL DEFAULT 0,
+        persistent INTEGER NOT NULL DEFAULT 0
       ) STRICT;
       CREATE TABLE IF NOT EXISTS sync_notifications (
         id INTEGER PRIMARY KEY,
@@ -89,6 +90,7 @@ export class BotDatabase {
     try { this.db.exec("ALTER TABLE scores ADD COLUMN sync_status TEXT CHECK(sync_status IN ('FDX', 'FS'))"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE import_tokens ADD COLUMN notification_channel_id TEXT"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE import_tokens ADD COLUMN notification_image INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
+    try { this.db.exec("ALTER TABLE import_tokens ADD COLUMN persistent INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE sync_notifications ADD COLUMN delivery_attempts INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE accounts ADD COLUMN default_image INTEGER NOT NULL DEFAULT 0"); } catch { /* existing database */ }
     try { this.db.exec("ALTER TABLE accounts ADD COLUMN default_count INTEGER CHECK(default_count BETWEEN 1 AND 50)"); } catch { /* existing database */ }
@@ -144,22 +146,42 @@ export class BotDatabase {
     if (!this.getAccount(discordUserId)) throw new Error("先に /maimai link を実行してください。");
     const token = randomBytes(24).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest("hex");
-    this.db.prepare("DELETE FROM import_tokens WHERE discord_user_id = ? OR expires_at < ?").run(discordUserId, Date.now());
+    this.db.prepare("DELETE FROM import_tokens WHERE (discord_user_id = ? AND persistent = 0) OR (persistent = 0 AND expires_at < ?)").run(discordUserId, Date.now());
     this.db.prepare(`INSERT INTO import_tokens (token_hash, discord_user_id, expires_at, notification_channel_id, notification_image)
       VALUES (?, ?, ?, ?, ?)`)
       .run(tokenHash, discordUserId, Date.now() + 10 * 60_000, notification?.channelId ?? null, notification?.wantsImage ? 1 : 0);
     return token;
   }
 
+  /** Creates the one-time setup secret used by a user's persistent bookmarklet. */
+  createPersistentSyncToken(discordUserId: string, notification: { channelId: string; wantsImage: boolean }, reset = false): { token?: string; created: boolean } {
+    this.ensureAccount(discordUserId);
+    if (reset) this.db.prepare("DELETE FROM import_tokens WHERE discord_user_id = ? AND persistent = 1").run(discordUserId);
+    const existing = this.db.prepare("SELECT token_hash FROM import_tokens WHERE discord_user_id = ? AND persistent = 1")
+      .get(discordUserId) as { token_hash: string } | undefined;
+    if (existing) {
+      this.db.prepare("UPDATE import_tokens SET notification_channel_id = ?, notification_image = ? WHERE token_hash = ?")
+        .run(notification.channelId, notification.wantsImage ? 1 : 0, existing.token_hash);
+      return { created: false };
+    }
+    const token = randomBytes(32).toString("base64url");
+    const tokenHash = createHash("sha256").update(token).digest("hex");
+    this.db.prepare(`INSERT INTO import_tokens
+      (token_hash, discord_user_id, expires_at, notification_channel_id, notification_image, persistent)
+      VALUES (?, ?, ?, ?, ?, 1)`)
+      .run(tokenHash, discordUserId, 0, notification.channelId, notification.wantsImage ? 1 : 0);
+    return { token, created: true };
+  }
+
   consumeImportTokenWithRecipient(token: string): ImportTokenRecipient | undefined {
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const record = this.db.prepare(`SELECT discord_user_id AS discordUserId, expires_at AS expiresAt,
-      notification_channel_id AS notificationChannelId, notification_image AS notificationImage
+      notification_channel_id AS notificationChannelId, notification_image AS notificationImage, persistent
       FROM import_tokens WHERE token_hash = ?`).get(tokenHash) as {
-        discordUserId: string; expiresAt: number; notificationChannelId: string | null; notificationImage: number;
+        discordUserId: string; expiresAt: number; notificationChannelId: string | null; notificationImage: number; persistent: number;
       } | undefined;
-    if (!record || record.expiresAt < Date.now()) return undefined;
-    this.db.prepare("DELETE FROM import_tokens WHERE token_hash = ?").run(tokenHash);
+    if (!record || (record.persistent !== 1 && record.expiresAt < Date.now())) return undefined;
+    if (record.persistent !== 1) this.db.prepare("DELETE FROM import_tokens WHERE token_hash = ?").run(tokenHash);
     return {
       discordUserId: record.discordUserId,
       notificationChannelId: record.notificationChannelId ?? undefined,

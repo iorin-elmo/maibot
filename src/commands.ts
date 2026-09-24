@@ -57,7 +57,8 @@ export const maimaiCommand = new SlashCommandBuilder()
     .addBooleanOption((option) => option.setName("image").setDescription("画像を既定で表示するか（未指定なら現在値を表示）"))
     .addIntegerOption((option) => option.setName("count").setDescription("一覧の既定表示件数（未指定なら現在値を表示）").setMinValue(1).setMaxValue(50)))
   .addSubcommand((command) => command.setName("sync").setDescription("無料コースのversion別スコアから同期します")
-    .addBooleanOption(imageOption))
+    .addBooleanOption(imageOption)
+    .addBooleanOption((option) => option.setName("reset").setDescription("恒久ブックマークを作り直すか")))
   .addSubcommand((command) => command.setName("newconstant").setDescription("新曲譜面を定数が高い順に表示します")
     .addIntegerOption(newConstantCountOption)
     .addBooleanOption(imageOption))
@@ -274,11 +275,16 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   }
   if (subcommand === "sync") {
     const wantsImage = interaction.options.getBoolean("image") ?? db.getDefaultImage(interaction.user.id);
-    const token = db.createImportToken(interaction.user.id, { channelId: interaction.channelId, wantsImage });
+    const persistent = db.createPersistentSyncToken(interaction.user.id, { channelId: interaction.channelId, wantsImage }, interaction.options.getBoolean("reset") === true);
+    if (!persistent.created) {
+      await interaction.reply({ content: "Your persistent `maibot` bookmark is ready. Run it on maimai DX NET to sync. This channel is now the notification destination; use `/maimai sync reset:true` to create a new bookmarklet.", ephemeral: true });
+      return;
+    }
+    const token = persistent.token!;
     const bookmarklet = makeFreeBookmarklet(importBaseUrl, token);
     const instructions = "maimai DX NETへログイン済みのブラウザで、任意のページから実行してください。全難易度の楽曲スコアを取得してBest 50を計算します。";
     await interaction.reply({
-      content: `下のコード全体をコピーして、ブラウザのブックマークURL欄に貼り付けてください。${instructions}\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのリンクは10分間・1回だけ有効です。SEGA ID・パスワードは送信されません。同期が終わると、このチャンネルに結果を通知します。`,
+      content: `最初の1回だけ、下のコード全体をコピーして名前を \`maibot\` としたブックマークのURL欄に貼り付けてください。以後はmaimai DX NET上でそのブックマークを実行するだけで同期できます。${instructions}\n\n\`\`\`\n${bookmarklet}\n\`\`\`\n\nこのブックマークはあなた専用です。共有しないでください。作り直す場合は \`/maimai sync reset:true\` を実行してください。`,
       ephemeral: true
     });
     return;
