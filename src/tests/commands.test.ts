@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { handleMaimai, handleMaimaiAutocomplete, maimaiCommand, renderCandidate, renderDxScore, renderDxStarCandidate, renderNewConstantScore, renderProgressScore } from "../commands.js";
+import { handleMaimai, handleMaimaiAutocomplete, maimaiCommand, renderCandidate, renderDifficultyScore, renderDxScore, renderDxStarCandidate, renderNewConstantScore, renderProgressScore } from "../commands.js";
 import { difficultyAccent, newConstantCards, progressCards, renderScoreCardImages } from "../best-image.js";
 import { BotDatabase } from "../database.js";
 
@@ -191,6 +191,14 @@ test("new chart constant rows distinguish unplayed scores while keeping achievem
   assert.equal(played, "# 1 [14.5] 100.0000% / DX MASTER / Played");
   assert.equal(unplayed, "# 2 [14.4]        -% / STD MASTER / Unplayed");
   assert.equal(played.indexOf("%"), unplayed.indexOf("%"));
+});
+
+test("difficulty rows omit the selected difficulty and align chart type to three characters", () => {
+  const dx = renderDifficultyScore({ title: "DX", difficulty: "EXPERT", rating: 0, internalLevel: 13.9, achievements: 99.6866, chartType: "dx" }, 0);
+  const standard = renderDifficultyScore({ title: "STD", difficulty: "EXPERT", rating: 0, internalLevel: 13.9, achievements: 99.5, chartType: "standard" }, 1);
+  assert.equal(dx, "# 1 [13.9]  99.6866% / DX  / DX");
+  assert.equal(standard, "# 2 [13.9]  99.5000% / STD / STD");
+  assert.equal(dx.indexOf("/ "), standard.indexOf("/ "));
 });
 
 test("progress rows keep achievement and status columns aligned", () => {

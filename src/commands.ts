@@ -160,6 +160,13 @@ export function renderNewConstantScore(score: ScoreRecord, index: number): strin
   return `#${String(index + 1).padStart(2)} ${constant} ${achievement.padStart(9)} / ${chart} / ${truncateSongTitle(score.title)}`;
 }
 
+export function renderDifficultyScore(score: ScoreRecord, index: number): string {
+  const constant = `[${score.internalLevel?.toFixed(1) ?? "?"}]`;
+  const achievement = score.achievements === undefined ? "-%" : `${score.achievements.toFixed(4)}%`;
+  const chartType = (score.chartType === "standard" ? "STD" : "DX").padEnd(3);
+  return `#${String(index + 1).padStart(2)} ${constant} ${achievement.padStart(9)} / ${chartType} / ${truncateSongTitle(score.title)}`;
+}
+
 export function renderProgressScore(score: ScoreRecord, index: number, kind: LevelProgressKind | "AP" | "FC" | "SSS" | "FDX"): string {
   const constant = `[${score.internalLevel?.toFixed(1) ?? "?"}]`;
   const achievement = (score.achievements === undefined ? "-%" : `${score.achievements.toFixed(4)}%`).padStart(9);
@@ -451,7 +458,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       await replyCardImages(interaction, playerName, `${difficulty}譜面定数順`, newConstantCards(scores), "maimai-difficulty");
       return;
     }
-    const descriptions = splitLines(scores.map(renderNewConstantScore), 3_900).map(asCodeBlock);
+    const descriptions = splitLines(scores.map(renderDifficultyScore), 3_900).map(asCodeBlock);
     await interaction.reply({ embeds: descriptions.map((description, index) => new EmbedBuilder()
       .setColor(0xff5a9e)
       .setTitle(`${playerName} の ${difficulty}譜面定数順${index ? "（続き）" : ""}`)
