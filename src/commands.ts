@@ -28,11 +28,11 @@ const levelOption = (option: SlashCommandStringOption) =>
 
 const difficultyOption = (option: SlashCommandStringOption, required = false) =>
   option.setName("difficulty").setDescription("対象難易度").setRequired(required).addChoices(
-    { name: "緑 BASIC", value: "BASIC" },
-    { name: "黄 ADVANCED", value: "ADVANCED" },
-    { name: "赤 EXPERT", value: "EXPERT" },
-    { name: "紫 MASTER", value: "MASTER" },
-    { name: "白 Re:MASTER", value: "RE:MASTER" }
+    { name: "BASIC", value: "BASIC" },
+    { name: "ADVANCED", value: "ADVANCED" },
+    { name: "EXPERT", value: "EXPERT" },
+    { name: "MASTER", value: "MASTER" },
+    { name: "Re:MASTER", value: "RE:MASTER" }
   );
 
 const levelProgressKindOption = (option: SlashCommandStringOption) =>

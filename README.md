@@ -11,7 +11,7 @@ maimai DX NETの無料コースのスコアを同期し、DiscordでBest 50を�
 | `/maimai newconstant [count] [image]` | 新曲（最新2バージョン）のDX/STD譜面を譜面定数順に表示。未プレイは `-%`、既定30件・最大50件 |
 | `/maimai plate <version> <kind> [count] [image]` | 指定プレートに不足する譜面を定数順に表示。`version` は熊・彩など、`kind` は神・極・将・舞舞、既定30件・最大50件 |
 | `/maimai level <level> <kind> [count] [image]` | 指定レベルの未AP+/AP/SSS+/SSS/SS+/SS/S+/S/FC+/FC/FDXを達成率順に表示、既定30件・最大50件 |
-| `/maimai difficulty <difficulty> [count] [image]` | 指定難易度（緑・黄・赤・紫・白）の全譜面を、譜面定数順・同じ定数では達成率順に表示、既定30件・最大50件 |
+| `/maimai difficulty <difficulty> [count] [image]` | 指定難易度（BASIC/ADVANCED/EXPERT/MASTER/Re:MASTER）の全譜面を、譜面定数順・同じ定数では達成率順に表示、既定30件・最大50件 |
 | `/maimai help` | 使い方を表示 |
 | `/maimai best [kind]` | 定数・単曲レート・達成率を含むベスト枠を表示 |
 | `/maimai mbest [kind]` | スマホ向けの短いベスト枠を表示 |
@@ -22,7 +22,7 @@ maimai DX NETの無料コースのスコアを同期し、DiscordでBest 50を�
 
 `kind` は `新曲` / `旧曲` / `全曲` から選べます。省略時は全曲です。
 
-`plate` と `level` は任意の `difficulty` 指定で、緑（BASIC）/黄（ADVANCED）/赤（EXPERT）/紫（MASTER）/白（Re:MASTER）に絞り込めます。
+`plate` と `level` は任意の `difficulty` 指定で、BASIC/ADVANCED/EXPERT/MASTER/Re:MASTERに絞り込めます。
 
 ## セットアップ
 
