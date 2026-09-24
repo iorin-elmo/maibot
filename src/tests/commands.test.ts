@@ -98,7 +98,7 @@ test("plate and level commands use their required inputs and 30-to-50 count rang
 test("new constant and progress cards retain the requested score details", () => {
   const score = { title: "Card", difficulty: "MASTER", rating: 0, internalLevel: 14.4, achievements: 100.5, chartType: "dx" as const, comboStatus: "AP" as const, syncStatus: "FDX" as const };
   assert.deepEqual(newConstantCards([score])[0], {
-    score, topLeft: "#1 Lv14.4", topRight: "DX MASTER", bottom: "100.5000%", accent: "#9a62db"
+    score, topLeft: "#1 Lv14.4", topRight: "DX", bottom: "100.5000%", accent: "#9a62db"
   });
   assert.deepEqual(progressCards([score], true)[0], {
     score, topLeft: "#1 Lv14.4", topRight: "AP / FDX", bottom: "100.5000%", accent: "#9a62db"

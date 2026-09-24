@@ -202,7 +202,9 @@ export function newConstantCards(scores: ScoreRecord[]): CardItem[] {
   return scores.map((score, index) => ({
     score,
     topLeft: `#${index + 1} Lv${score.internalLevel?.toFixed(1) ?? "?"}`,
-    topRight: `${score.chartType === "standard" ? "STD" : "DX"} ${score.difficulty.toUpperCase()}`,
+    // Difficulty is expressed by the card frame colour; retain only the
+    // chart type, which cannot be inferred from that colour.
+    topRight: score.chartType === "standard" ? "STD" : "DX",
     bottom: score.achievements === undefined ? "-%" : `${score.achievements.toFixed(4)}%`,
     accent: difficultyAccent(score.difficulty)
   }));
