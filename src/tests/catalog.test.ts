@@ -97,6 +97,14 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
     assert.equal(masterDifficulty.find((score) => score.chartType === "standard")?.achievements, 99);
 
     document = {
+      versions: [{ version: "FiNALE" }, { version: "current" }],
+      songs: [{ title: "ジングルベル[H.]", version: "FiNALE", sheets: [{ type: "std", difficulty: "MASTER", level: "13", internalLevelValue: 13 }] }]
+    };
+    const jingleCatalog = new MaimaiCatalog("https://example.invalid/dxdata.json");
+    assert.equal((await jingleCatalog.plateProgressRanking(["FiNALE"], [], true, ["ジングルベル［H.］"])).length, 0);
+    assert.equal((await jingleCatalog.plateProgressRanking(["FiNALE"], [], true)).length, 1);
+
+    document = {
       versions: [{ version: "old" }, { version: "new-1" }, { version: "new-2" }],
       songs: [{ title: "Unlisted", version: "not-in-version-list", sheets: [{ type: "dx", difficulty: "MASTER", level: "14", internalLevelValue: 14 }] }]
     };
@@ -104,7 +112,7 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
     await assert.rejects(unlistedCatalog.enrich([{
       title: "Unlisted", difficulty: "MASTER", level: "14", achievements: 100, rating: 0, chartKind: "unknown", chartType: "dx"
     }]), /譜面定数またはバージョン/);
-    assert.equal(fetchCount, 4);
+    assert.equal(fetchCount, 5);
   } finally {
     globalThis.fetch = originalFetch;
   }

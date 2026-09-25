@@ -57,6 +57,10 @@ const starOption = (option: SlashCommandIntegerOption) =>
 const imageOption = (option: import("discord.js").SlashCommandBooleanOption) =>
   option.setName("image").setDescription("ジャケット付きの画像で出力します");
 
+function difficultyKey(value: string): string {
+  return value.normalize("NFKC").replace(/[\s:]/g, "").toUpperCase();
+}
+
 export const maimaiCommand = new SlashCommandBuilder()
   .setName("maimai")
   .setDescription("maimaiのベスト枠を表示します")
@@ -380,7 +384,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       return;
     }
     const difficultyScores = plateScores
-      .filter((score) => !requestedDifficulty || score.difficulty.toUpperCase() === requestedDifficulty);
+      .filter((score) => !requestedDifficulty || difficultyKey(score.difficulty) === difficultyKey(requestedDifficulty));
     if (!difficultyScores.length) {
       await interaction.editReply(`${plate.name} に ${requestedDifficulty} の対象譜面はありません。`);
       return;
@@ -423,7 +427,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
       return;
     }
     const difficultyScores = levelScores
-      .filter((score) => !requestedDifficulty || score.difficulty.toUpperCase() === requestedDifficulty);
+      .filter((score) => !requestedDifficulty || difficultyKey(score.difficulty) === difficultyKey(requestedDifficulty));
     if (!difficultyScores.length) {
       await interaction.editReply(`Lv.${level} に ${requestedDifficulty} の譜面はありません。`);
       return;
