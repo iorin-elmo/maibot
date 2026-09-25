@@ -98,10 +98,10 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
 
     document = {
       versions: [{ version: "FiNALE" }, { version: "current" }],
-      songs: [{ title: "ジングルベル[H.]", version: "FiNALE", sheets: [{ type: "std", difficulty: "MASTER", level: "13", internalLevelValue: 13 }] }]
+      songs: [{ title: "ジングルベル", version: "FiNALE", sheets: [{ type: "std", difficulty: "MASTER", level: "13", internalLevelValue: 13 }] }]
     };
     const jingleCatalog = new MaimaiCatalog("https://example.invalid/dxdata.json");
-    assert.equal((await jingleCatalog.plateProgressRanking(["FiNALE"], [], true, ["ジングルベル［H.］"])).length, 0);
+    assert.equal((await jingleCatalog.plateProgressRanking(["FiNALE"], [], true, ["ジングルベル"])).length, 0);
     assert.equal((await jingleCatalog.plateProgressRanking(["FiNALE"], [], true)).length, 1);
 
     document = {

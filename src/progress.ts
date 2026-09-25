@@ -62,7 +62,7 @@ const excludedFromAllPlates = ["前前前世"];
 export const plateVersions: PlateVersion[] = [
   ...versionGroups.map(([name, label, versions]) => ({
     name, label, versions: [...versions],
-    excludedTitles: name === "真" ? [...excludedFromAllPlates, "ジングルベル［H.］"] : [...excludedFromAllPlates]
+    excludedTitles: name === "真" ? [...excludedFromAllPlates, "ジングルベル"] : [...excludedFromAllPlates]
   })),
   {
     name: "舞", label: "FiNALEまでのスタンダード譜面", versions: versionGroups.slice(0, 12).flatMap(([, , versions]) => versions as unknown as string[]),
