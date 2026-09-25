@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { handleMaimai, handleMaimaiAutocomplete, maimaiCommand, renderCandidate, renderDxScore, renderDxStarCandidate, renderNewConstantScore, renderProgressScore } from "../commands.js";
+import { handleMaimai, handleMaimaiAutocomplete, maimaiCommand, renderCandidate, renderDifficultyScore, renderDxScore, renderDxStarCandidate, renderNewConstantScore, renderProgressScore } from "../commands.js";
 import { difficultyAccent, newConstantCards, progressCards, renderScoreCardImages } from "../best-image.js";
 import { BotDatabase } from "../database.js";
 
@@ -71,6 +71,91 @@ test("真将 is explicitly rejected as a nonexistent plate", async () => {
   const catalog = { excludeLocked: async <T>(scores: T) => scores, enrich: async <T>(scores: T) => scores };
   await handleMaimai(interaction as never, { getAccount: () => ({ rating: 0 }), getDefaultImage: () => false, getDefaultCount: () => undefined, getScores: () => [] } as never, "https://sync.example.com", catalog as never);
   assert.match(reply?.content ?? "", /真将は存在しない/);
+});
+
+test("difficulty lists charts by constant and then achievement", async () => {
+  let requestedDifficulty: string | undefined;
+  let reply: { embeds?: Array<{ toJSON(): { description?: string } }> } | undefined;
+  const scores = [
+    { title: "Lower", difficulty: "EXPERT", level: "13", internalLevel: 13.7, achievements: 100, rating: 0, chartKind: "old" as const },
+    { title: "Same Constant Lower", difficulty: "EXPERT", level: "14", internalLevel: 14, achievements: 98, rating: 0, chartKind: "old" as const },
+    { title: "Same Constant Higher", difficulty: "EXPERT", level: "14", internalLevel: 14, achievements: 99, rating: 0, chartKind: "old" as const }
+  ];
+  const interaction = {
+    user: { id: "discord-user" }, channelId: "channel",
+    options: {
+      getSubcommand: () => "difficulty",
+      getString: (name: string) => name === "difficulty" ? "EXPERT" : null,
+      getInteger: () => null,
+      getBoolean: () => null
+    },
+    reply: async (message: typeof reply) => { reply = message; }
+  };
+  const catalog = {
+    excludeLocked: async <T>(value: T) => value,
+    enrich: async <T>(value: T) => value,
+    difficultyProgressRanking: async (difficulty: string) => { requestedDifficulty = difficulty; return scores; }
+  };
+  const db = { getAccount: () => ({ rating: 0, playerName: "Tester" }), getDefaultImage: () => false, getDefaultCount: () => undefined, getScores: () => [] };
+  await handleMaimai(interaction as never, db as never, "https://sync.example.com", catalog as never);
+  assert.equal(requestedDifficulty, "EXPERT");
+  const description = reply?.embeds?.[0].toJSON().description ?? "";
+  assert.ok(description.indexOf("Same Constant Higher") < description.indexOf("Same Constant Lower"));
+  assert.ok(description.indexOf("Same Constant Lower") < description.indexOf("Lower"));
+});
+
+test("level and plate report an empty difficulty filter instead of false completion", async () => {
+  const score = { title: "MASTER only", difficulty: "MASTER", level: "13", internalLevel: 13, rating: 0, chartKind: "old" as const };
+  const catalog = {
+    excludeLocked: async <T>(value: T) => value,
+    enrich: async <T>(value: T) => value,
+    levelProgressRanking: async () => [score],
+    plateProgressRanking: async () => [score]
+  };
+  const db = { getAccount: () => ({ rating: 0, playerName: "Tester" }), getDefaultImage: () => false, getDefaultCount: () => undefined, getScores: () => [] };
+  for (const subcommand of ["level", "plate"] as const) {
+    let reply = "";
+    const interaction = {
+      user: { id: "discord-user" }, channelId: "channel",
+      options: {
+        getSubcommand: () => subcommand,
+        getString: (name: string) => name === "difficulty" ? "RE:MASTER" : name === "level" ? "13" : name === "version" ? "熊" : subcommand === "plate" ? "神" : "AP",
+        getInteger: () => null,
+        getBoolean: () => null
+      },
+      deferReply: async () => {},
+      editReply: async (message: string) => { reply = message; }
+    };
+    await handleMaimai(interaction as never, db as never, "https://sync.example.com", catalog as never);
+    assert.match(reply, /RE:MASTER.*(?:対象譜面|譜面).*ありません/);
+  }
+});
+
+test("level and plate scope completion messages to the selected difficulty", async () => {
+  const score = { title: "EXPERT complete", difficulty: "EXPERT", level: "13", internalLevel: 13, rating: 0, chartKind: "old" as const, comboStatus: "AP" as const };
+  const catalog = {
+    excludeLocked: async <T>(value: T) => value,
+    enrich: async <T>(value: T) => value,
+    levelProgressRanking: async () => [score],
+    plateProgressRanking: async () => [score]
+  };
+  const db = { getAccount: () => ({ rating: 0, playerName: "Tester" }), getDefaultImage: () => false, getDefaultCount: () => undefined, getScores: () => [] };
+  for (const subcommand of ["level", "plate"] as const) {
+    let reply = "";
+    const interaction = {
+      user: { id: "discord-user" }, channelId: "channel",
+      options: {
+        getSubcommand: () => subcommand,
+        getString: (name: string) => name === "difficulty" ? "EXPERT" : name === "level" ? "13" : name === "version" ? "熊" : subcommand === "plate" ? "神" : "AP",
+        getInteger: () => null,
+        getBoolean: () => null
+      },
+      deferReply: async () => {},
+      editReply: async (message: string) => { reply = message; }
+    };
+    await handleMaimai(interaction as never, db as never, "https://sync.example.com", catalog as never);
+    assert.match(reply, /EXPERT/);
+  }
 });
 
 test("sync issues one persistent bookmarklet, updates its destination, and sync-reset rotates it", async () => {
@@ -162,6 +247,14 @@ test("new chart constant rows distinguish unplayed scores while keeping achievem
   assert.equal(played.indexOf("%"), unplayed.indexOf("%"));
 });
 
+test("difficulty rows omit the selected difficulty and align chart type to three characters", () => {
+  const dx = renderDifficultyScore({ title: "DX", difficulty: "EXPERT", rating: 0, internalLevel: 13.9, achievements: 99.6866, chartType: "dx" }, 0);
+  const standard = renderDifficultyScore({ title: "STD", difficulty: "EXPERT", rating: 0, internalLevel: 13.9, achievements: 99.5, chartType: "standard" }, 1);
+  assert.equal(dx, "# 1 [13.9]  99.6866% / DX  / DX");
+  assert.equal(standard, "# 2 [13.9]  99.5000% / STD / STD");
+  assert.equal(dx.indexOf("/ "), standard.indexOf("/ "));
+});
+
 test("progress rows keep achievement and status columns aligned", () => {
   const combo = renderProgressScore({ title: "Combo", difficulty: "MASTER", rating: 0, internalLevel: 14.4, achievements: 100.9999, comboStatus: "AP", syncStatus: "FDX" }, 0, "AP");
   const missingCombo = renderProgressScore({ title: "Missing", difficulty: "MASTER", rating: 0, internalLevel: 14.3 }, 1, "FC");
@@ -186,9 +279,13 @@ test("plate and level commands use their required inputs and 30-to-50 count rang
   assert.equal(plateCount?.min_value, 1);
   assert.equal(plateCount?.max_value, 50);
   assert.ok(plate?.options?.find((option) => option.name === "image"));
+  assert.ok(plate?.options?.find((option) => option.name === "difficulty"));
   assert.equal(level?.options?.find((option) => option.name === "level")?.required, true);
   assert.equal(level?.options?.find((option) => option.name === "kind")?.required, true);
   assert.ok(level?.options?.find((option) => option.name === "image"));
+  assert.ok(level?.options?.find((option) => option.name === "difficulty"));
+  const difficulty = command.options.find((option) => option.name === "difficulty");
+  assert.equal(difficulty?.options?.find((option) => option.name === "difficulty")?.required, true);
   assert.ok(command.options.find((option) => option.name === "newconstant")?.options?.find((option) => option.name === "image"));
   assert.ok(command.options.find((option) => option.name === "sync-reset"));
   const settings = command.options.find((option) => option.name === "settings");

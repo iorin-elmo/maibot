@@ -274,6 +274,12 @@ export class MaimaiCatalog {
     return this.scoreCharts(charts.filter((chart) => chart.level === level), scores);
   }
 
+  async difficultyProgressRanking(difficulty: string, scores: ScoreRecord[]): Promise<ScoreRecord[]> {
+    const { charts } = await this.load(false);
+    const normalizedDifficulty = normalizeDifficulty(difficulty);
+    return this.scoreCharts(charts.filter((chart) => normalizeDifficulty(chart.difficulty) === normalizedDifficulty), scores);
+  }
+
   /** Lists the charts that count toward a plate; Re:MASTER is included only where required. */
   async plateProgressRanking(versions: readonly string[], scores: ScoreRecord[], standardOnly = false, excludedTitles: readonly string[] = [], includeRemaster = false): Promise<ScoreRecord[]> {
     const { charts, knownVersions } = await this.load(true);

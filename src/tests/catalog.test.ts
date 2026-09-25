@@ -90,6 +90,11 @@ test("無料同期は不正なバージョン一覧をキャッシュせず、�
       title: "Ambiguous", difficulty: "REMASTER", level: "14", achievements: 98, rating: 0, chartKind: "new", chartType: "dx"
     }]);
     assert.equal(remasterProgress.find((score) => score.difficulty === "RE:MASTER" && score.chartType === "dx")?.achievements, 98);
+    const masterDifficulty = await ambiguousCatalog.difficultyProgressRanking("MASTER", [{
+      title: "Ambiguous", difficulty: "MASTER", level: "14", achievements: 99, rating: 0, chartKind: "new", chartType: "standard"
+    }]);
+    assert.equal(masterDifficulty.length, 2);
+    assert.equal(masterDifficulty.find((score) => score.chartType === "standard")?.achievements, 99);
 
     document = {
       versions: [{ version: "old" }, { version: "new-1" }, { version: "new-2" }],
