@@ -392,7 +392,8 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         || a.title.localeCompare(b.title, "ja"))
       .slice(0, count);
     if (!scores.length) {
-      await interaction.editReply(`${plate.name} の条件をすべて満たしています！`);
+      const scope = requestedDifficulty ? `${requestedDifficulty} の対象譜面で` : "";
+      await interaction.editReply(`${plate.name} の${scope}条件をすべて満たしています！`);
       return;
     }
     if (wantsImage) {
@@ -434,7 +435,8 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
         || a.title.localeCompare(b.title, "ja"))
       .slice(0, count);
     if (!scores.length) {
-      await interaction.editReply(`Lv.${level} の全譜面で ${kind} を達成しています！`);
+      const scope = requestedDifficulty ? `${requestedDifficulty} の譜面で` : "全譜面で";
+      await interaction.editReply(`Lv.${level} の${scope} ${kind} を達成しています！`);
       return;
     }
     if (wantsImage) {
