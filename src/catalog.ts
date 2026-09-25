@@ -285,10 +285,10 @@ export class MaimaiCatalog {
     const { charts, knownVersions } = await this.load(true);
     if (versions.some((version) => !knownVersions.has(version))) throw new Error("プレートのバージョン情報を照合できませんでした。");
     const targetVersions = new Set(versions);
-    const excluded = new Set(excludedTitles);
+    const excluded = new Set(excludedTitles.map(normalize));
     return this.scoreCharts(charts.filter((chart) => chart.version !== undefined
       && targetVersions.has(chart.version)
-      && !excluded.has(chart.title)
+      && !excluded.has(normalize(chart.title))
       && (includeRemaster || normalizeDifficulty(chart.difficulty) !== "remaster")
       && (!standardOnly || chart.chartType === "standard")), scores);
   }
