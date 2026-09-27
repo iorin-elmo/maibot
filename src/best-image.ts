@@ -136,7 +136,11 @@ export async function renderScoreCardImages(playerName: string, title: string, i
     const gutter = 12;
     const headerHeight = summary ? 102 : 72;
     const rows = Math.ceil(page.length / columns);
-    const width = columns * cardWidth + (columns + 1) * gutter;
+    const cardAreaWidth = columns * cardWidth + (columns + 1) * gutter;
+    const measureContext = createCanvas(1, 1).getContext("2d");
+    measureContext.font = `bold 18px ${FONT_NAME}, monospace`;
+    const summaryWidth = summary ? Math.ceil(measureContext.measureText(summary).width) + gutter * 2 : 0;
+    const width = Math.max(cardAreaWidth, summaryWidth);
     const height = headerHeight + rows * cardHeight + (rows + 1) * gutter;
     const canvas = createCanvas(width, height);
     const context = canvas.getContext("2d");

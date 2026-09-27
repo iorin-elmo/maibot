@@ -268,7 +268,10 @@ test("Best image reserves a header line for its rating summary", async () => {
   }];
   const normal = await renderScoreCardImages("Tester", "Best 50", cards);
   const withSummary = await renderScoreCardImages("Tester", "Best 50", cards, "新曲レート: 300 + 旧曲レート: 0 = 全曲レート: 300");
-  assert.equal((await loadImage(withSummary[0])).height, (await loadImage(normal[0])).height + 30);
+  const normalImage = await loadImage(normal[0]);
+  const summaryImage = await loadImage(withSummary[0]);
+  assert.equal(summaryImage.height, normalImage.height + 30);
+  assert.ok(summaryImage.width > normalImage.width);
 });
 
 test("score card frames use the maimai difficulty colours", () => {
