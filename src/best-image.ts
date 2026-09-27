@@ -122,7 +122,7 @@ function drawCard(context: SKRSContext2D, item: CardItem, image: Awaited<ReturnT
   context.fillText(item.bottom, x + 10, y + height - 13);
 }
 
-export async function renderScoreCardImages(playerName: string, title: string, items: CardItem[]): Promise<Buffer[]> {
+export async function renderScoreCardImages(playerName: string, title: string, items: CardItem[], summary?: string): Promise<Buffer[]> {
   // Best 50 is intentionally a single 5 × 10 sheet, matching the in-game
   // rating-card layout. JPEG keeps the finished sheet below Discord's upload
   // limit even when every jacket is present.
@@ -134,7 +134,7 @@ export async function renderScoreCardImages(playerName: string, title: string, i
     const cardWidth = 236;
     const cardHeight = 220;
     const gutter = 12;
-    const headerHeight = 72;
+    const headerHeight = summary ? 102 : 72;
     const rows = Math.ceil(page.length / columns);
     const width = columns * cardWidth + (columns + 1) * gutter;
     const height = headerHeight + rows * cardHeight + (rows + 1) * gutter;
@@ -147,6 +147,11 @@ export async function renderScoreCardImages(playerName: string, title: string, i
     context.fillStyle = "#f8f5ff";
     context.font = `bold 25px ${FONT_NAME}, monospace`;
     context.fillText(`${playerName} の ${title}${start ? ` (${start + 1}-${start + page.length})` : ""}`, gutter, 45);
+    if (summary) {
+      context.font = `bold 18px ${FONT_NAME}, monospace`;
+      context.fillStyle = "#ffef75";
+      context.fillText(summary, gutter, 78);
+    }
     const jackets = await Promise.all(page.map((item) => jacket(item.score)));
     page.forEach((item, index) => {
       const column = index % columns;
@@ -338,7 +343,7 @@ export async function renderSyncSummaryImage(summary: SyncSummary): Promise<Buff
 }
 
 // Kept for the existing /maimai image command. Its output now uses jacket cards.
-export async function renderBestImage(playerName: string, label: string, _summary: string, scores: ScoreRecord[], mixed: boolean): Promise<Buffer> {
-  const images = await renderScoreCardImages(playerName, label, bestCards(scores, mixed));
+export async function renderBestImage(playerName: string, label: string, summary: string, scores: ScoreRecord[], mixed: boolean): Promise<Buffer> {
+  const images = await renderScoreCardImages(playerName, label, bestCards(scores, mixed), summary);
   return images[0] ?? createCanvas(1, 1).toBuffer("image/jpeg", 92);
 }

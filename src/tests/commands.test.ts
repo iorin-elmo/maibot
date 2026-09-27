@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { handleMaimai, handleMaimaiAutocomplete, maimaiCommand, renderCandidate, renderDifficultyScore, renderDxScore, renderDxStarCandidate, renderNewConstantScore, renderProgressScore } from "../commands.js";
 import { difficultyAccent, newConstantCards, progressCards, renderScoreCardImages } from "../best-image.js";
+import { loadImage } from "@napi-rs/canvas";
 import { BotDatabase } from "../database.js";
 
 function syncInteraction(subcommand: "sync" | "sync-reset", channelId: string, image: boolean | null = null) {
@@ -256,6 +257,18 @@ test("score cards render 50 songs as a single sheet even when jackets are unavai
   const images = await renderScoreCardImages("Tester", "DXスコア%順", cards);
   assert.equal(images.length, 1);
   assert.ok(images[0].length > 10_000);
+});
+
+test("Best image reserves a header line for its rating summary", async () => {
+  const cards = [{
+    score: { title: "No Jacket", difficulty: "MASTER", rating: 0 },
+    topLeft: "#1 Lv14",
+    topRight: "300",
+    bottom: "100.0000%"
+  }];
+  const normal = await renderScoreCardImages("Tester", "Best 50", cards);
+  const withSummary = await renderScoreCardImages("Tester", "Best 50", cards, "新曲レート: 300 + 旧曲レート: 0 = 全曲レート: 300");
+  assert.equal((await loadImage(withSummary[0])).height, (await loadImage(normal[0])).height + 30);
 });
 
 test("score card frames use the maimai difficulty colours", () => {

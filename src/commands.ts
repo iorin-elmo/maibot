@@ -250,9 +250,9 @@ function candidateEmbeds(playerName: string, kind: "new" | "old", candidates: Be
     .setDescription(`${index ? "" : `${syncNote}必要達成率差が小さい順です。「(+値)」は、Bestレートが伸びる最初の上位ランクまで上げた場合の増分です。\n\n`}${asCodeBlock(description)}`));
 }
 
-async function replyCardImages(interaction: ChatInputCommandInteraction, playerName: string, title: string, cards: Parameters<typeof renderScoreCardImages>[2], filename: string): Promise<void> {
+async function replyCardImages(interaction: ChatInputCommandInteraction, playerName: string, title: string, cards: Parameters<typeof renderScoreCardImages>[2], filename: string, summary?: string): Promise<void> {
   if (!interaction.deferred && !interaction.replied) await interaction.deferReply();
-  const images = await renderScoreCardImages(playerName, title, cards);
+  const images = await renderScoreCardImages(playerName, title, cards, summary);
   await interaction.editReply({ files: images.map((image, index) => new AttachmentBuilder(image, { name: `${filename}-${index + 1}.jpg` })) });
 }
 
@@ -587,7 +587,7 @@ export async function handleMaimai(interaction: ChatInputCommandInteraction, db:
   if (wantsImage) {
     await interaction.deferReply();
     const imageScores = await enrichImageScores(catalog, scores);
-    await replyCardImages(interaction, playerName, label, bestCards(imageScores, mixed), "maimai-best");
+    await replyCardImages(interaction, playerName, label, bestCards(imageScores, mixed), "maimai-best", summary);
     return;
   }
 
