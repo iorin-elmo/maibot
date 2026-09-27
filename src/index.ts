@@ -1,11 +1,10 @@
-import { AttachmentBuilder, Client, Events, GatewayIntentBits, REST, Routes, type ChatInputCommandInteraction } from "discord.js";
+import { Client, Events, GatewayIntentBits, REST, Routes, type ChatInputCommandInteraction } from "discord.js";
 import { config } from "./config.js";
 import { BotDatabase } from "./database.js";
 import { handleMaimai, handleMaimaiAutocomplete, maimaiCommand } from "./commands.js";
 import { startBrowserSyncServer } from "./browser-sync.js";
 import { MaimaiCatalog } from "./catalog.js";
-import { renderSyncSummaryImage } from "./best-image.js";
-import { syncSummaryEmbed } from "./sync-summary.js";
+import { createSyncNotificationMessage } from "./sync-notification.js";
 
 const db = new BotDatabase(config.databasePath);
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -16,10 +15,7 @@ function startSyncServer(): void {
   if (!client.isReady()) {
     await new Promise<void>((resolve) => client.once(Events.ClientReady, () => resolve()));
   }
-  const files = recipient.wantsImage
-    ? [new AttachmentBuilder(await renderSyncSummaryImage(summary), { name: "maimai-sync-summary.jpg" })]
-    : [];
-  const message = { embeds: [syncSummaryEmbed(summary)], files };
+  const message = await createSyncNotificationMessage(recipient, summary);
   try {
     const channel = await client.channels.fetch(recipient.notificationChannelId);
     if (!channel?.isSendable()) throw new Error("Sync notification channel is not sendable");
